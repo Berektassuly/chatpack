@@ -1,20 +1,58 @@
 # 📦 chatpack
 
-> Compress chat exports from Telegram, WhatsApp, and Instagram into token-efficient formats for LLMs.
+> Feed your chat history to LLMs. Compress Telegram, WhatsApp, Instagram exports into token-efficient formats.
 
 [![CI](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml/badge.svg)](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/berektassuly/chatpack/branch/main/graph/badge.svg)](https://codecov.io/gh/berektassuly/chatpack)
 [![Crates.io](https://img.shields.io/crates/v/chatpack.svg)](https://crates.io/crates/chatpack)
+[![Downloads](https://img.shields.io/crates/d/chatpack.svg)](https://crates.io/crates/chatpack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Why?
+**Platforms:** Windows • macOS • Linux
 
-LLM context windows are expensive. A typical Telegram export is 80% metadata noise. **chatpack** strips it down to what matters: `sender` and `content`.
+## The Problem
+
+You want to ask Claude/ChatGPT about your conversations, but:
+- Raw exports are **80% metadata noise**
+- JSON structure wastes tokens on brackets and keys
+- Context windows are expensive
+
+## The Solution
 
 ```
-Before: 34,478 tokens (raw JSON)
-After:  26,169 tokens (chatpack CSV)
-        ━━━━━━━━━━━━━━━━━━━━━━━━
-        24% reduction ✨
+┌─────────────────┐     ┌──────────┐     ┌─────────────────┐
+│ Telegram JSON   │     │          │     │ Clean CSV/JSONL │
+│ WhatsApp TXT    │ ──▶ │ chatpack │ ──▶ │ Ready for LLM   │
+│ Instagram JSON  │     │          │     │ 24% fewer tokens│
+└─────────────────┘     └──────────┘     └─────────────────┘
+```
+
+## Real Numbers
+
+| Metric | Before | After | Savings |
+|--------|--------|-------|---------|
+| Telegram (34K msgs) | 34,478 tokens | 26,169 tokens | **24%** |
+| WhatsApp (1.7K msgs) | 12,340 tokens | 8,920 tokens | **28%** |
+| File size | 4.2 MB | 1.1 MB | **74%** |
+
+## Use Cases
+
+### 💬 Chat with your chat history
+```bash
+chatpack tg telegram_export.json -o context.txt
+# Paste into ChatGPT: "Based on this conversation, what did we decide about...?"
+```
+
+### 🔍 Build RAG pipeline
+```bash
+chatpack tg chat.json -f jsonl -t -o dataset.jsonl
+# Each line = one document with timestamp for vector DB
+```
+
+### 📊 Analyze conversations
+```bash
+chatpack wa chat.txt --from "Alice" --after 2024-01-01 -f json
+# Filter and export specific messages
 ```
 
 ## Features
@@ -23,7 +61,7 @@ After:  26,169 tokens (chatpack CSV)
 - 📱 **Multi-platform** — Telegram, WhatsApp, Instagram
 - 🔀 **Smart merge** — Consecutive messages from same sender → one entry
 - 🎯 **Filters** — By date, by sender
-- 📄 **Formats** — CSV, JSON, JSONL
+- 📄 **Formats** — CSV (token-efficient), JSON, JSONL (RAG-ready)
 
 ## Installation
 
@@ -251,30 +289,6 @@ Options:
       --from <USER>       Filter: from specific sender
   -h, --help              Print help
   -V, --version           Print version
-```
-
-## Use Cases
-
-### Feed chat to LLM
-```bash
-chatpack tg chat.json -o context.csv
-# Then paste context.csv into ChatGPT/Claude
-```
-
-### Build RAG dataset
-```bash
-chatpack tg chat.json -f jsonl -t -o dataset.jsonl
-# Each line is a document with timestamp
-```
-
-### Analyze specific period
-```bash
-chatpack tg chat.json --after 2024-01-01 --before 2024-02-01 -f json
-```
-
-### Export single person's messages
-```bash
-chatpack wa chat.txt --from "Mom" -o mom_messages.csv
 ```
 
 ## License
