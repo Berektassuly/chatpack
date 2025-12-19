@@ -37,6 +37,59 @@ cd chatpack
 cargo build --release
 ```
 
+## How to Export Your Chats
+
+### 📱 Telegram (Desktop)
+
+1. Open **Telegram Desktop** (not mobile!)
+2. Go to **Settings** → **Advanced** → **Export Telegram data**
+3. Select the chat you want to export
+4. **Important settings:**
+   - ✅ Format: **JSON**
+   - ❌ Uncheck: Photos, Videos, Voice messages (saves space)
+   - ✅ Check: Text messages
+5. Click **Export** → Wait → Get `result.json`
+
+```bash
+chatpack tg result.json
+```
+
+### 💬 WhatsApp (Mobile)
+
+**iPhone:**
+1. Open chat → Tap contact name at top
+2. Scroll down → **Export Chat**
+3. Choose **Without Media**
+4. Send to yourself (email, AirDrop, Files)
+
+**Android:**
+1. Open chat → Tap **⋮** (three dots)
+2. **More** → **Export chat**
+3. Choose **Without media**
+4. Save/send the `.txt` file
+
+```bash
+chatpack wa "WhatsApp Chat with Mom.txt"
+```
+
+### 📸 Instagram (Web)
+
+1. Go to [instagram.com](https://instagram.com) → Log in
+2. **Settings** → **Your activity** → **Download your information**
+3. **Request a download** → Select **Some of your information**
+4. ✅ Check only **Messages**
+5. **Format:** JSON, **Date range:** All time
+6. Click **Submit request** → Wait for email (can take hours/days)
+7. Download ZIP → Extract → Find `messages/inbox/username/message_1.json`
+
+```bash
+chatpack ig message_1.json
+```
+
+> ⚠️ Instagram exports have broken encoding (Mojibake). chatpack fixes it automatically!
+
+---
+
 ## Usage
 
 ### Basic
@@ -136,26 +189,13 @@ Alice;Nice! Let's celebrate 🎉
 {"sender":"Alice","content":"Nice! Let's celebrate 🎉"}
 ```
 
-## Supported Export Formats
+## Technical Details
 
-### Telegram
-Export via: **Settings → Advanced → Export Telegram Data**
-- ✅ JSON format
-- ✅ Message IDs, timestamps, replies, edits
-- ✅ Nested text objects (bold, links, etc.)
-
-### WhatsApp
-Export via: **Chat → ⋮ → More → Export chat → Without media**
-- ✅ TXT format (all locales)
-- ✅ Auto-detects date format (US, EU, RU)
-- ✅ Multiline messages
-- ✅ Filters system messages
-
-### Instagram
-Export via: **Settings → Your activity → Download your information**
-- ✅ JSON format
-- ✅ Fixes Mojibake encoding (Cyrillic, etc.)
-- ✅ Filters empty shares/reactions
+| Source | Format | Features |
+|--------|--------|----------|
+| Telegram | JSON | IDs, timestamps, replies, edits, nested text |
+| WhatsApp | TXT | Auto-detect locale (US/EU/RU), multiline, system filter |
+| Instagram | JSON | Mojibake fix, empty message filter |
 
 ## Performance
 
