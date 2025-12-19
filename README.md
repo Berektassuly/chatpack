@@ -2,6 +2,7 @@
 
 > Compress chat exports from Telegram, WhatsApp, and Instagram into token-efficient formats for LLMs.
 
+[![CI](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml/badge.svg)](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/chatpack.svg)](https://crates.io/crates/chatpack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -26,11 +27,31 @@ After:  26,169 tokens (chatpack CSV)
 
 ## Installation
 
+### Pre-built binaries (recommended)
+
+Download the latest release for your platform:
+
+| Platform | Download |
+|----------|----------|
+| Windows | [chatpack-windows-x64.exe](https://github.com/berektassuly/chatpack/releases/latest/download/chatpack-windows-x64.exe) |
+| macOS (Intel) | [chatpack-macos-x64](https://github.com/berektassuly/chatpack/releases/latest/download/chatpack-macos-x64) |
+| macOS (Apple Silicon) | [chatpack-macos-arm64](https://github.com/berektassuly/chatpack/releases/latest/download/chatpack-macos-arm64) |
+| Linux | [chatpack-linux-x64](https://github.com/berektassuly/chatpack/releases/latest/download/chatpack-linux-x64) |
+
+**macOS/Linux:** After downloading, make it executable:
+```bash
+chmod +x chatpack-*
+./chatpack-macos-arm64 tg chat.json
+```
+
+### Via Cargo
+
 ```bash
 cargo install chatpack
 ```
 
-Or build from source:
+### Build from source
+
 ```bash
 git clone https://github.com/berektassuly/chatpack
 cd chatpack
