@@ -15,6 +15,7 @@ mod core;
 mod parsers;
 
 use std::process;
+use std::time::Instant;
 
 use clap::Parser;
 
@@ -33,6 +34,7 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let total_start = Instant::now();
     let args = Args::parse();
 
     // Create parser for the selected source
@@ -71,15 +73,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 1: Parse
     println!("⏳ Parsing {}...", parser.name());
+    let parse_start = Instant::now();
     let messages = parser.parse(&args.input)?;
+    let parse_time = parse_start.elapsed();
     let original_count = messages.len();
-    println!("   Found {} messages", original_count);
+    println!("   Found {} messages ({:.2}s)", original_count, parse_time.as_secs_f64());
 
     // Step 2: Filter (BEFORE merge)
     let filtered = if filter_config.is_active() {
         println!("🔍 Filtering messages...");
+        let filter_start = Instant::now();
         let filtered = apply_filters(messages, &filter_config);
-        println!("   {} messages after filtering", filtered.len());
+        let filter_time = filter_start.elapsed();
+        println!("   {} messages after filtering ({:.2}s)", filtered.len(), filter_time.as_secs_f64());
         filtered
     } else {
         messages
@@ -92,11 +98,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         filtered
     } else {
         println!("🔀 Merging consecutive messages...");
+        let merge_start = Instant::now();
         let merged = merge_consecutive(filtered);
+        let merge_time = merge_start.elapsed();
         println!(
-            "   Compressed to {} entries ({:.1}% reduction)",
+            "   Compressed to {} entries ({:.1}% reduction, {:.2}s)",
             merged.len(),
-            ProcessingStats::new(filtered_count, merged.len()).compression_ratio()
+            ProcessingStats::new(filtered_count, merged.len()).compression_ratio(),
+            merge_time.as_secs_f64()
         );
         merged
     };
@@ -118,25 +127,35 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 5: Write output in selected format
     println!("💾 Writing {}...", args.format);
+    let write_start = Instant::now();
     match args.format {
         OutputFormat::Csv => write_csv(&final_messages, &output_path, &output_config)?,
         OutputFormat::Json => write_json(&final_messages, &output_path, &output_config)?,
         OutputFormat::Jsonl => write_jsonl(&final_messages, &output_path, &output_config)?,
     }
+    let write_time = write_start.elapsed();
+    println!("   Written in {:.2}s", write_time.as_secs_f64());
+
+    let total_time = total_start.elapsed();
 
     println!();
     println!("✅ Done! Output saved to {}", output_path);
 
-    // Summary
-    if filter_config.is_active() || !args.no_merge {
-        println!();
-        println!("📊 Summary:");
-        println!("   Original:  {} messages", original_count);
-        if filter_config.is_active() {
-            println!("   Filtered:  {} messages", filtered_count);
-        }
-        println!("   Final:     {} entries", final_messages.len());
+    // Summary with benchmarks
+    println!();
+    println!("📊 Summary:");
+    println!("   Original:  {} messages", original_count);
+    if filter_config.is_active() {
+        println!("   Filtered:  {} messages", filtered_count);
     }
+    println!("   Final:     {} entries", final_messages.len());
+    
+    // Performance stats
+    println!();
+    println!("⚡ Performance:");
+    println!("   Total time:  {:.2}s", total_time.as_secs_f64());
+    let msgs_per_sec = original_count as f64 / total_time.as_secs_f64();
+    println!("   Throughput:  {:.0} messages/sec", msgs_per_sec);
 
     Ok(())
 }
