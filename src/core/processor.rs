@@ -47,6 +47,7 @@ impl ProcessingStats {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_filtered(mut self, filtered: usize) -> Self {
         self.filtered_count = Some(filtered);
         self

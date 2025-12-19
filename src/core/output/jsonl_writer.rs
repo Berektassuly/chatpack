@@ -112,7 +112,7 @@ mod tests {
         let lines: Vec<String> = reader.lines().map(|l| l.unwrap()).collect();
 
         assert_eq!(lines.len(), 2);
-        
+
         // Parse each line as JSON to verify validity
         let msg1: serde_json::Value = serde_json::from_str(&lines[0]).unwrap();
         assert_eq!(msg1["sender"], "Alice");
@@ -127,9 +127,11 @@ mod tests {
     fn test_write_jsonl_with_metadata() {
         use chrono::TimeZone;
 
-        let ts = chrono::Utc.with_ymd_and_hms(2024, 6, 15, 12, 30, 0).unwrap();
+        let ts = chrono::Utc
+            .with_ymd_and_hms(2024, 6, 15, 12, 30, 0)
+            .unwrap();
         let edited = chrono::Utc.with_ymd_and_hms(2024, 6, 15, 13, 0, 0).unwrap();
-        
+
         let msg = InternalMessage::new("Alice", "Hello")
             .timestamp(ts)
             .id(123)

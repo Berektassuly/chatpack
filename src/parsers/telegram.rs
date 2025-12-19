@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -95,16 +95,18 @@ impl ChatParser for TelegramParser {
 
                 // Parse timestamp
                 let timestamp = msg.date_unixtime.as_ref().and_then(|ts_str| {
-                    ts_str.parse::<i64>().ok().and_then(|ts| {
-                        DateTime::from_timestamp(ts, 0)
-                    })
+                    ts_str
+                        .parse::<i64>()
+                        .ok()
+                        .and_then(|ts| DateTime::from_timestamp(ts, 0))
                 });
 
                 // Parse edited timestamp
                 let edited = msg.edited_unixtime.as_ref().and_then(|ts_str| {
-                    ts_str.parse::<i64>().ok().and_then(|ts| {
-                        DateTime::from_timestamp(ts, 0)
-                    })
+                    ts_str
+                        .parse::<i64>()
+                        .ok()
+                        .and_then(|ts| DateTime::from_timestamp(ts, 0))
                 });
 
                 Some(InternalMessage::with_metadata(
@@ -164,7 +166,10 @@ mod tests {
             {"type": "link", "text": "https://example.com"},
             " cool!"
         ]);
-        assert_eq!(extract_text(&value), "Check this: https://example.com cool!");
+        assert_eq!(
+            extract_text(&value),
+            "Check this: https://example.com cool!"
+        );
     }
 
     #[test]

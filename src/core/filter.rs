@@ -33,7 +33,7 @@ impl FilterConfig {
     pub fn before_date(mut self, date_str: &str) -> Result<Self, FilterError> {
         let naive = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
             .map_err(|_| FilterError::InvalidDateFormat(date_str.to_string()))?;
-        
+
         // End of the day
         let naive_dt = naive.and_hms_opt(23, 59, 59).unwrap();
         let dt = naive_dt.and_utc();
@@ -42,7 +42,7 @@ impl FilterConfig {
     }
 
     /// Set the sender filter.
-    pub fn from_user(mut self, user: String) -> Self {
+    pub fn with_user(mut self, user: String) -> Self {
         self.from = Some(user);
         self
     }
@@ -76,18 +76,21 @@ impl std::error::Error for FilterError {}
 fn parse_date(date_str: &str) -> Result<DateTime<Utc>, FilterError> {
     let naive = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
         .map_err(|_| FilterError::InvalidDateFormat(date_str.to_string()))?;
-    
+
     // Start of the day
     let naive_dt = naive.and_hms_opt(0, 0, 0).unwrap();
     Ok(naive_dt.and_utc())
 }
 
 /// Apply filters to a vector of messages.
-/// 
+///
 /// Note: Messages without timestamps are excluded when date filters are active.
 /// This ensures consistent behavior - if you're filtering by date, you probably
 /// want messages with known dates.
-pub fn apply_filters(messages: Vec<InternalMessage>, config: &FilterConfig) -> Vec<InternalMessage> {
+pub fn apply_filters(
+    messages: Vec<InternalMessage>,
+    config: &FilterConfig,
+) -> Vec<InternalMessage> {
     if !config.is_active() {
         return messages;
     }
@@ -96,25 +99,21 @@ pub fn apply_filters(messages: Vec<InternalMessage>, config: &FilterConfig) -> V
         .into_iter()
         .filter(|msg| {
             // Filter by sender
-            if let Some(ref from) = config.from {
-                if !msg.sender.eq_ignore_ascii_case(from) {
-                    return false;
-                }
+            if let Some(ref from) = config.from
+                && !msg.sender.eq_ignore_ascii_case(from)
+            {
+                return false;
             }
 
             // Filter by date (only if message has timestamp)
             if config.after.is_some() || config.before.is_some() {
                 match msg.timestamp {
                     Some(ts) => {
-                        if let Some(after) = config.after {
-                            if ts < after {
-                                return false;
-                            }
+                        if config.after.is_some_and(|after| ts < after) {
+                            return false;
                         }
-                        if let Some(before) = config.before {
-                            if ts > before {
-                                return false;
-                            }
+                        if config.before.is_some_and(|before| ts > before) {
+                            return false;
                         }
                     }
                     None => {
@@ -150,11 +149,15 @@ mod tests {
             make_msg("alice", "Bye", None), // lowercase
         ];
 
-        let config = FilterConfig::new().from_user("Alice".to_string());
+        let config = FilterConfig::new().with_user("Alice".to_string());
         let filtered = apply_filters(messages, &config);
 
         assert_eq!(filtered.len(), 2);
-        assert!(filtered.iter().all(|m| m.sender.eq_ignore_ascii_case("Alice")));
+        assert!(
+            filtered
+                .iter()
+                .all(|m| m.sender.eq_ignore_ascii_case("Alice"))
+        );
     }
 
     #[test]

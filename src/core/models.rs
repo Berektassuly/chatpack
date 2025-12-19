@@ -25,6 +25,7 @@ pub struct InternalMessage {
     pub edited: Option<DateTime<Utc>>,
 }
 
+#[allow(dead_code)]
 impl InternalMessage {
     /// Creates a new message with only sender and content.
     /// Other fields are set to None.
