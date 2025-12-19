@@ -2,6 +2,7 @@
 /target/
 debug/
 release/
+chatpack.exe
 
 # Cargo
 Cargo.lock
