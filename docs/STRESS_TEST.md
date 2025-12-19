@@ -38,9 +38,9 @@ cargo run --release --bin gen_test -- 1000000 mega_test.json telegram
 
 | Messages | File Size | Parse Time | Throughput |
 |----------|-----------|------------|------------|
-| 10K | ~5 MB | <1s | ~50K msg/s |
-| 100K | ~50 MB | ~2s | ~50K msg/s |
-| 1M | ~500 MB | ~20s | ~50K msg/s |
+| 34K | ~10 MB | 0.2s | ~130-186K msg/s |
+| 100K | ~50 MB | ~0.6s | ~150K msg/s |
+| 1M | ~500 MB | ~6s | ~150K msg/s |
 
 ## Memory Optimization (Future)
 
