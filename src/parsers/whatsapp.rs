@@ -1,7 +1,9 @@
+//! WhatsApp TXT export parser.
+
 use std::error::Error;
 
-use crate::core::InternalMessage;
 use super::ChatParser;
+use crate::core::InternalMessage;
 
 /// Parser for WhatsApp TXT exports.
 ///
@@ -50,10 +52,7 @@ impl ChatParser for WhatsAppParser {
         // 4. Skip system messages (no colon after sender name)
         // 5. Convert to InternalMessage
 
-        Err(format!(
-            "WhatsApp parser not yet implemented. File: {}",
-            file_path
-        ).into())
+        Err(format!("WhatsApp parser not yet implemented. File: {}", file_path).into())
     }
 }
 
@@ -66,11 +65,4 @@ mod tests {
         let parser = WhatsAppParser::new();
         assert_eq!(parser.name(), "WhatsApp");
     }
-
-    // TODO: Add parsing tests when implemented
-    // #[test]
-    // fn test_parse_simple_message() {
-    //     let content = "[01/01/2024, 12:00:00] Alice: Hello!";
-    //     // ...
-    // }
 }

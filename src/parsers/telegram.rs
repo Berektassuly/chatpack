@@ -1,12 +1,15 @@
+//! Telegram JSON export parser.
+
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::core::InternalMessage;
 use super::ChatParser;
+use crate::core::InternalMessage;
 
 /// Parser for Telegram JSON exports.
 ///
@@ -16,9 +19,12 @@ use super::ChatParser;
 ///   "name": "Chat Name",
 ///   "messages": [
 ///     {
+///       "id": 12345,
 ///       "type": "message",
+///       "date_unixtime": "1234567890",
 ///       "from": "Sender Name",
-///       "text": "Hello" | ["Hello", {"type": "link", "text": "url"}]
+///       "text": "Hello" | ["Hello", {"type": "link", "text": "url"}],
+///       "reply_to_message_id": 12344
 ///     }
 ///   ]
 /// }
@@ -46,10 +52,19 @@ struct TelegramExport {
 
 #[derive(Debug, Deserialize)]
 struct TelegramMessage {
+    /// Message ID
+    id: Option<u64>,
+    /// Message type (we only care about "message")
     #[serde(rename = "type")]
     msg_type: String,
+    /// Unix timestamp as string
+    date_unixtime: Option<String>,
+    /// Sender name
     from: Option<String>,
+    /// Message text (can be string or array)
     text: Option<Value>,
+    /// Reply reference
+    reply_to_message_id: Option<u64>,
 }
 
 impl ChatParser for TelegramParser {
@@ -75,7 +90,20 @@ impl ChatParser for TelegramParser {
                     return None;
                 }
 
-                Some(InternalMessage::new(sender, content))
+                // Parse timestamp
+                let timestamp = msg.date_unixtime.as_ref().and_then(|ts_str| {
+                    ts_str.parse::<i64>().ok().and_then(|ts| {
+                        DateTime::from_timestamp(ts, 0)
+                    })
+                });
+
+                Some(InternalMessage::with_metadata(
+                    sender,
+                    content,
+                    timestamp,
+                    msg.id,
+                    msg.reply_to_message_id,
+                ))
             })
             .collect();
 
@@ -132,5 +160,11 @@ mod tests {
     fn test_extract_text_empty() {
         let value = json!(null);
         assert_eq!(extract_text(&value), "");
+    }
+
+    #[test]
+    fn test_parser_name() {
+        let parser = TelegramParser::new();
+        assert_eq!(parser.name(), "Telegram");
     }
 }

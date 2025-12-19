@@ -1,7 +1,9 @@
+//! Instagram JSON export parser.
+
 use std::error::Error;
 
-use crate::core::InternalMessage;
 use super::ChatParser;
+use crate::core::InternalMessage;
 
 /// Parser for Instagram JSON exports.
 ///
@@ -67,28 +69,22 @@ impl ChatParser for InstagramParser {
         // #[derive(Deserialize)]
         // struct InstagramMessage {
         //     sender_name: String,
+        //     timestamp_ms: Option<i64>,
         //     content: Option<String>,
         //     #[serde(rename = "type")]
         //     msg_type: Option<String>,
         // }
 
-        Err(format!(
-            "Instagram parser not yet implemented. File: {}",
-            file_path
-        ).into())
+        Err(format!("Instagram parser not yet implemented. File: {}", file_path).into())
     }
 }
 
-/// Fixes Instagram's broken UTF-8 encoding.
-/// Instagram exports text as latin1-decoded UTF-8, causing mojibake.
-///
-/// # Example
-/// Input:  "Привет" exported as "ÐŸÑ€Ð¸Ð²ÐµÑ‚"
-/// Output: "Привет"
+/// Fix Instagram's broken UTF-8 encoding.
+/// Instagram exports text as Latin-1 interpreted as UTF-8, causing mojibake.
 #[allow(dead_code)]
 fn fix_instagram_encoding(text: &str) -> String {
-    // Instagram encodes UTF-8 bytes as latin1 characters
-    // To fix: interpret each char as a byte and decode as UTF-8
+    // Instagram encodes UTF-8 as Latin-1, creating mojibake
+    // This attempts to reverse that by re-interpreting bytes
     let bytes: Vec<u8> = text.chars().map(|c| c as u8).collect();
     String::from_utf8(bytes).unwrap_or_else(|_| text.to_string())
 }
@@ -105,7 +101,6 @@ mod tests {
 
     #[test]
     fn test_fix_encoding() {
-        // This test will work when you have actual mojibake examples
         let fixed = fix_instagram_encoding("Hello");
         assert_eq!(fixed, "Hello");
     }
