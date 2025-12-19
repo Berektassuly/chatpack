@@ -24,7 +24,8 @@ use crate::core::InternalMessage;
 ///       "date_unixtime": "1234567890",
 ///       "from": "Sender Name",
 ///       "text": "Hello" | ["Hello", {"type": "link", "text": "url"}],
-///       "reply_to_message_id": 12344
+///       "reply_to_message_id": 12344,
+///       "edited_unixtime": "1234567899"
 ///     }
 ///   ]
 /// }
@@ -65,6 +66,8 @@ struct TelegramMessage {
     text: Option<Value>,
     /// Reply reference
     reply_to_message_id: Option<u64>,
+    /// Edit timestamp as string (if message was edited)
+    edited_unixtime: Option<String>,
 }
 
 impl ChatParser for TelegramParser {
@@ -97,12 +100,20 @@ impl ChatParser for TelegramParser {
                     })
                 });
 
+                // Parse edited timestamp
+                let edited = msg.edited_unixtime.as_ref().and_then(|ts_str| {
+                    ts_str.parse::<i64>().ok().and_then(|ts| {
+                        DateTime::from_timestamp(ts, 0)
+                    })
+                });
+
                 Some(InternalMessage::with_metadata(
                     sender,
                     content,
                     timestamp,
                     msg.id,
                     msg.reply_to_message_id,
+                    edited,
                 ))
             })
             .collect();

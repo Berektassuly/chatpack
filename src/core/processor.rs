@@ -10,7 +10,7 @@ use super::models::InternalMessage;
 /// Output: [("Alice", "Hi\nHow are you?"), ("Bob", "Fine")]
 ///
 /// # Note
-/// When merging, the first message's metadata (timestamp, id, reply_to)
+/// When merging, the first message's metadata (timestamp, id, reply_to, edited)
 /// is preserved. This represents the start of the conversation block.
 pub fn merge_consecutive(messages: Vec<InternalMessage>) -> Vec<InternalMessage> {
     let mut merged: Vec<InternalMessage> = Vec::new();
