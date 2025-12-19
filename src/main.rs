@@ -21,8 +21,8 @@ use clap::Parser;
 
 use cli::{Args, OutputFormat};
 use core::{
-    apply_filters, merge_consecutive, write_csv, write_json, write_jsonl,
-    FilterConfig, OutputConfig, ProcessingStats,
+    FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive, write_csv,
+    write_json, write_jsonl,
 };
 use parsers::create_parser;
 
@@ -65,7 +65,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if let Some(ref from) = args.from {
-        filter_config = filter_config.from_user(from.clone());
+        filter_config = filter_config.with_user(from.clone());
         println!("👤 From:    {}", from);
     }
 
@@ -77,7 +77,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let messages = parser.parse(&args.input)?;
     let parse_time = parse_start.elapsed();
     let original_count = messages.len();
-    println!("   Found {} messages ({:.2}s)", original_count, parse_time.as_secs_f64());
+    println!(
+        "   Found {} messages ({:.2}s)",
+        original_count,
+        parse_time.as_secs_f64()
+    );
 
     // Step 2: Filter (BEFORE merge)
     let filtered = if filter_config.is_active() {
@@ -85,7 +89,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let filter_start = Instant::now();
         let filtered = apply_filters(messages, &filter_config);
         let filter_time = filter_start.elapsed();
-        println!("   {} messages after filtering ({:.2}s)", filtered.len(), filter_time.as_secs_f64());
+        println!(
+            "   {} messages after filtering ({:.2}s)",
+            filtered.len(),
+            filter_time.as_secs_f64()
+        );
         filtered
     } else {
         messages
@@ -149,7 +157,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         println!("   Filtered:  {} messages", filtered_count);
     }
     println!("   Final:     {} entries", final_messages.len());
-    
+
     // Performance stats
     println!();
     println!("⚡ Performance:");

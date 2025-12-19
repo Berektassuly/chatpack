@@ -22,9 +22,7 @@ pub fn write_csv(
     config: &OutputConfig,
 ) -> Result<(), Box<dyn Error>> {
     let file = File::create(output_path)?;
-    let mut writer = csv::WriterBuilder::new()
-        .delimiter(b';')
-        .from_writer(file);
+    let mut writer = csv::WriterBuilder::new().delimiter(b';').from_writer(file);
 
     // Build header dynamically
     let header = build_header(config);

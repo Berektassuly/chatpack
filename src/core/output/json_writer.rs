@@ -113,10 +113,10 @@ mod tests {
     fn test_write_json_with_metadata() {
         use chrono::TimeZone;
 
-        let ts = chrono::Utc.with_ymd_and_hms(2024, 6, 15, 12, 30, 0).unwrap();
-        let msg = InternalMessage::new("Alice", "Hello")
-            .timestamp(ts)
-            .id(123);
+        let ts = chrono::Utc
+            .with_ymd_and_hms(2024, 6, 15, 12, 30, 0)
+            .unwrap();
+        let msg = InternalMessage::new("Alice", "Hello").timestamp(ts).id(123);
 
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_str().unwrap();

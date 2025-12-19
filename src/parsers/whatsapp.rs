@@ -131,7 +131,7 @@ impl FormatDetector {
 
 /// Auto-detect date format by analyzing first N lines.
 fn detect_format(lines: &[String]) -> Option<DateFormat> {
-    let detectors = vec![
+    let detectors = [
         FormatDetector::new(DateFormat::US),
         FormatDetector::new(DateFormat::EuDotBracketed),
         FormatDetector::new(DateFormat::EuDotNoBracket),
@@ -139,7 +139,7 @@ fn detect_format(lines: &[String]) -> Option<DateFormat> {
         FormatDetector::new(DateFormat::EuSlashBracketed),
     ];
 
-    let mut scores = vec![0usize; detectors.len()];
+    let mut scores = [0usize; 5];
 
     for line in lines {
         for (i, detector) in detectors.iter().enumerate() {
@@ -245,13 +245,6 @@ fn parse_timestamp(date_str: &str, time_str: &str, format: DateFormat) -> Option
     None
 }
 
-/// Parsed message from a line.
-struct ParsedLine {
-    timestamp: Option<DateTime<Utc>>,
-    sender: String,
-    content: String,
-}
-
 impl ChatParser for WhatsAppParser {
     fn name(&self) -> &'static str {
         "WhatsApp"
@@ -268,10 +261,10 @@ impl ChatParser for WhatsAppParser {
 
         // Step 1: Auto-detect format from first 20 lines
         let sample_size = std::cmp::min(20, lines.len());
-        let format = detect_format(&lines[..sample_size]).ok_or_else(|| {
+        let format = detect_format(&lines[..sample_size]).ok_or(
             "Could not detect WhatsApp export format. \
-             Make sure the file is a valid WhatsApp chat export."
-        })?;
+             Make sure the file is a valid WhatsApp chat export.",
+        )?;
 
         // Step 2: Compile regex for detected format
         let regex = Regex::new(format.pattern())?;
@@ -299,9 +292,7 @@ impl ChatParser for WhatsAppParser {
                 let timestamp = parse_timestamp(date_str, time_str, format);
 
                 let msg = InternalMessage::with_metadata(
-                    sender,
-                    content,
-                    timestamp,
+                    sender, content, timestamp,
                     None, // WhatsApp doesn't have message IDs in export
                     None, // No reply references in text export
                     None, // No edit timestamps
@@ -401,7 +392,7 @@ mod tests {
     fn test_parse_timestamp_eu_dot() {
         let ts = parse_timestamp("15.01.24", "10:30:45", DateFormat::EuDotBracketed);
         assert!(ts.is_some());
-        
+
         let ts2 = parse_timestamp("26.10.2025", "20:40", DateFormat::EuDotNoBracket);
         assert!(ts2.is_some());
     }

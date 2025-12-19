@@ -1,7 +1,7 @@
 //! Instagram JSON export parser.
 //!
 //! Handles Meta's JSON exports with Mojibake encoding fix.
-//! 
+//!
 //! Instagram exports messages as JSON (from "Download Your Data" feature).
 //! The main quirk is that Meta exports UTF-8 text encoded as ISO-8859-1,
 //! causing Cyrillic and other non-ASCII text to appear as garbage (Mojibake).
