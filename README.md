@@ -1,187 +1,221 @@
 # 📦 chatpack
 
-> Compress chat exports from Telegram, WhatsApp, and Instagram into token-efficient CSV for LLMs.
+> Compress chat exports from Telegram, WhatsApp, and Instagram into token-efficient formats for LLMs.
 
-Less tokens. Same conversation.
+[![Crates.io](https://img.shields.io/crates/v/chatpack.svg)](https://crates.io/crates/chatpack)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## ✨ Features
+## Why?
 
-- **Token optimization** — Merges consecutive messages from the same sender, reducing token count by 30-50%
-- **Multi-platform** — Supports Telegram, WhatsApp, and Instagram exports
-- **Clean output** — Strips metadata (timestamps, IDs, reactions) leaving only sender and content
-- **LLM-ready** — CSV format with semicolon delimiter, perfect for feeding into AI models
-- **Fast** — Written in Rust for maximum performance
+LLM context windows are expensive. A typical Telegram export is 80% metadata noise. **chatpack** strips it down to what matters: `sender` and `content`.
 
-## 📊 Example
-
-**Before** (62 messages):
 ```
-[14:25] Alice: Hey
-[14:25] Alice: How are you?
-[14:26] Alice: Did you see the news?
-[14:27] Bob: Hi! Yes I did
+Before: 34,478 tokens (raw JSON)
+After:  26,169 tokens (chatpack CSV)
+        ━━━━━━━━━━━━━━━━━━━━━━━━
+        24% reduction ✨
 ```
 
-**After** (2 rows, 43.5% reduction):
-```csv
-Sender;Content
-Alice;Hey
-How are you?
-Did you see the news?
-Bob;Hi! Yes I did
-```
+## Features
 
-## 🚀 Installation
+- 🚀 **Fast** — 20K+ messages/sec
+- 📱 **Multi-platform** — Telegram, WhatsApp, Instagram
+- 🔀 **Smart merge** — Consecutive messages from same sender → one entry
+- 🎯 **Filters** — By date, by sender
+- 📄 **Formats** — CSV, JSON, JSONL
 
-### From source
+## Installation
 
 ```bash
-git clone https://github.com/berektassuly/chatpack.git
+cargo install chatpack
+```
+
+Or build from source:
+```bash
+git clone https://github.com/berektassuly/chatpack
 cd chatpack
 cargo build --release
 ```
 
-Binary will be at `./target/release/chatpack`
+## Usage
 
-### Using Cargo
-
-```bash
-cargo install --path .
-```
-
-## 📖 Usage
-
-```bash
-chatpack <source> <input_file> [output_file]
-```
-
-### Examples
+### Basic
 
 ```bash
 # Telegram JSON export
-chatpack telegram result.json
-chatpack tg chat.json output.csv
+chatpack tg result.json
 
-# WhatsApp TXT export
-chatpack whatsapp _chat.txt
-chatpack wa chat.txt messages.csv
+# WhatsApp TXT export  
+chatpack wa chat.txt
 
 # Instagram JSON export
-chatpack instagram messages.json
-chatpack ig inbox.json chat.csv
+chatpack ig message_1.json
 ```
 
-### Options
-
-| Flag | Description |
-|------|-------------|
-| `-h, --help` | Show help message |
-| `-v, --version` | Show version |
-
-### Output format
-
-- **File:** `optimized_chat.csv` (default)
-- **Delimiter:** Semicolon (`;`)
-- **Columns:** `Sender`, `Content`
-- **Encoding:** UTF-8
-
-## 📱 Supported Sources
-
-| Source | Format | Status | Export guide |
-|--------|--------|--------|--------------|
-| Telegram | JSON | ✅ Ready | Desktop → Settings → Export chat |
-| WhatsApp | TXT | 🔲 Coming | Chat → More → Export chat |
-| Instagram | JSON | 🔲 Coming | Settings → Download your data |
-
-## 🏗️ Project Structure
-
-```
-chatpack/
-├── Cargo.toml
-└── src/
-    ├── main.rs              # CLI entry point
-    ├── core/
-    │   ├── mod.rs
-    │   ├── models.rs        # InternalMessage struct
-    │   └── processor.rs     # Merge logic + CSV writer
-    └── parsers/
-        ├── mod.rs           # ChatParser trait + factory
-        ├── telegram.rs      # ✅ Implemented
-        ├── whatsapp.rs      # 🔲 Stub
-        └── instagram.rs     # 🔲 Stub
-```
-
-## 🔧 Adding a New Parser
-
-1. Create `src/parsers/newsource.rs`:
-
-```rust
-use crate::core::InternalMessage;
-use super::ChatParser;
-
-pub struct NewSourceParser;
-
-impl NewSourceParser {
-    pub fn new() -> Self { Self }
-}
-
-impl ChatParser for NewSourceParser {
-    fn name(&self) -> &'static str {
-        "NewSource"
-    }
-
-    fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-        // Your parsing logic here
-        // Return Vec<InternalMessage { sender, content }>
-    }
-}
-```
-
-2. Register in `src/parsers/mod.rs`:
-
-```rust
-mod newsource;
-pub use newsource::NewSourceParser;
-
-// In ChatSource enum:
-NewSource,
-
-// In from_arg():
-"newsource" | "ns" => Some(Self::NewSource),
-
-// In create_parser():
-ChatSource::NewSource => Box::new(NewSourceParser::new()),
-```
-
-3. Done! No changes needed in `main.rs` or `processor.rs`.
-
-## 🧪 Running Tests
+### Output Formats
 
 ```bash
-cargo test
+# CSV (default) — best for token efficiency
+chatpack tg chat.json -f csv
+
+# JSON — structured array
+chatpack tg chat.json -f json
+
+# JSONL — one JSON per line, streaming-friendly
+chatpack tg chat.json -f jsonl
 ```
 
-## 📈 Benchmarks
+### Filters
 
-| Chat size | Messages | After merge | Reduction | Time |
-|-----------|----------|-------------|-----------|------|
-| Small | 62 | 35 | 43.5% | <1ms |
-| Medium | 1,000 | ~600 | ~40% | ~5ms |
-| Large | 10,000 | ~5,500 | ~45% | ~50ms |
+```bash
+# Messages after date
+chatpack tg chat.json --after 2024-01-01
 
-## 🤝 Contributing
+# Messages before date
+chatpack tg chat.json --before 2024-06-01
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/discord-parser`)
-3. Implement the `ChatParser` trait for your source
-4. Add tests
-5. Submit a pull request
+# Messages from specific user
+chatpack tg chat.json --from "Alice"
 
-## 📄 License
+# Combine filters
+chatpack tg chat.json --after 2024-01-01 --from "Bob"
+```
 
-MIT License — see [LICENSE](LICENSE) for details.
+### Metadata Options
 
-## 🙏 Acknowledgments
+```bash
+# Include timestamps
+chatpack tg chat.json -t
 
-- Built for the AI era, where every token counts
-- Inspired by the need to analyze chat histories with LLMs without burning through context windows
+# Include message IDs
+chatpack tg chat.json --ids
+
+# Include reply references
+chatpack tg chat.json -r
+
+# Include edit timestamps
+chatpack tg chat.json -e
+
+# All metadata
+chatpack tg chat.json -t -r -e --ids
+```
+
+### Other Options
+
+```bash
+# Custom output file
+chatpack tg chat.json -o my_output.csv
+
+# Disable message merging
+chatpack tg chat.json --no-merge
+```
+
+## Output Examples
+
+### CSV (default)
+```csv
+Sender;Content
+Alice;Hey! How are you?
+Bob;Good thanks! Just finished the project.
+Alice;Nice! Let's celebrate 🎉
+```
+
+### JSON
+```json
+[
+  {"sender": "Alice", "content": "Hey! How are you?"},
+  {"sender": "Bob", "content": "Good thanks! Just finished the project."},
+  {"sender": "Alice", "content": "Nice! Let's celebrate 🎉"}
+]
+```
+
+### JSONL
+```jsonl
+{"sender":"Alice","content":"Hey! How are you?"}
+{"sender":"Bob","content":"Good thanks! Just finished the project."}
+{"sender":"Alice","content":"Nice! Let's celebrate 🎉"}
+```
+
+## Supported Export Formats
+
+### Telegram
+Export via: **Settings → Advanced → Export Telegram Data**
+- ✅ JSON format
+- ✅ Message IDs, timestamps, replies, edits
+- ✅ Nested text objects (bold, links, etc.)
+
+### WhatsApp
+Export via: **Chat → ⋮ → More → Export chat → Without media**
+- ✅ TXT format (all locales)
+- ✅ Auto-detects date format (US, EU, RU)
+- ✅ Multiline messages
+- ✅ Filters system messages
+
+### Instagram
+Export via: **Settings → Your activity → Download your information**
+- ✅ JSON format
+- ✅ Fixes Mojibake encoding (Cyrillic, etc.)
+- ✅ Filters empty shares/reactions
+
+## Performance
+
+Tested on 500MB files with toxic data (Zalgo, emoji spam, 100KB strings):
+
+| Metric | Value |
+|--------|-------|
+| Throughput | 17-24K msg/s |
+| Memory | ~2x file size |
+| Max tested | 516 MB, 100K messages |
+
+## CLI Reference
+
+```
+chatpack <SOURCE> <INPUT> [OPTIONS]
+
+Sources:
+  tg, telegram    Telegram JSON export
+  wa, whatsapp    WhatsApp TXT export
+  ig, instagram   Instagram JSON export
+
+Options:
+  -o, --output <FILE>     Output file [default: optimized_chat.csv]
+  -f, --format <FORMAT>   Output format: csv, json, jsonl [default: csv]
+  -t, --timestamps        Include timestamps
+  -r, --replies           Include reply references
+  -e, --edited            Include edit timestamps
+      --ids               Include message IDs
+      --no-merge          Don't merge consecutive messages
+      --after <DATE>      Filter: after date (YYYY-MM-DD)
+      --before <DATE>     Filter: before date (YYYY-MM-DD)
+      --from <USER>       Filter: from specific sender
+  -h, --help              Print help
+  -V, --version           Print version
+```
+
+## Use Cases
+
+### Feed chat to LLM
+```bash
+chatpack tg chat.json -o context.csv
+# Then paste context.csv into ChatGPT/Claude
+```
+
+### Build RAG dataset
+```bash
+chatpack tg chat.json -f jsonl -t -o dataset.jsonl
+# Each line is a document with timestamp
+```
+
+### Analyze specific period
+```bash
+chatpack tg chat.json --after 2024-01-01 --before 2024-02-01 -f json
+```
+
+### Export single person's messages
+```bash
+chatpack wa chat.txt --from "Mom" -o mom_messages.csv
+```
+
+## License
+
+MIT © [Mukhammedali Berektassuly](https://berektassuly.com)
