@@ -19,6 +19,7 @@ Thumbs.db
 
 # Test files
 *.json
+*.jsonl
 !examples/*.json
 *.csv
 *.txt

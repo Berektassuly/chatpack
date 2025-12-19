@@ -1,21 +1,28 @@
 //! Core data models for chat messages.
 
 use chrono::{DateTime, Utc};
+use serde::Serialize;
 
 /// Universal message representation for all chat sources.
 /// All parsers convert their native format into this structure.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct InternalMessage {
     /// Message sender name
     pub sender: String,
     /// Message text content
     pub content: String,
     /// Message timestamp (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<DateTime<Utc>>,
     /// Message ID (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<u64>,
     /// ID of the message this is replying to (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<u64>,
+    /// Timestamp when message was last edited (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edited: Option<DateTime<Utc>>,
 }
 
 impl InternalMessage {
@@ -28,6 +35,7 @@ impl InternalMessage {
             timestamp: None,
             id: None,
             reply_to: None,
+            edited: None,
         }
     }
 
@@ -38,6 +46,7 @@ impl InternalMessage {
         timestamp: Option<DateTime<Utc>>,
         id: Option<u64>,
         reply_to: Option<u64>,
+        edited: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             sender: sender.into(),
@@ -45,6 +54,7 @@ impl InternalMessage {
             timestamp,
             id,
             reply_to,
+            edited,
         }
     }
 
@@ -65,6 +75,12 @@ impl InternalMessage {
         self.reply_to = Some(reply_id);
         self
     }
+
+    /// Builder-style method to set edited timestamp.
+    pub fn edited(mut self, ts: DateTime<Utc>) -> Self {
+        self.edited = Some(ts);
+        self
+    }
 }
 
 /// Configuration for output format.
@@ -77,6 +93,8 @@ pub struct OutputConfig {
     pub include_ids: bool,
     /// Include reply references in output
     pub include_replies: bool,
+    /// Include edited timestamps in output
+    pub include_edited: bool,
 }
 
 impl OutputConfig {
@@ -96,6 +114,11 @@ impl OutputConfig {
 
     pub fn with_replies(mut self) -> Self {
         self.include_replies = true;
+        self
+    }
+
+    pub fn with_edited(mut self) -> Self {
+        self.include_edited = true;
         self
     }
 }

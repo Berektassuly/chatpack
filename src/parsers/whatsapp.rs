@@ -37,21 +37,6 @@ impl ChatParser for WhatsAppParser {
     }
 
     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-        // TODO: Implement WhatsApp parsing
-        //
-        // Expected format (each line):
-        // [DD/MM/YYYY, HH:MM:SS] Sender: Message
-        //
-        // Regex pattern suggestion:
-        // r"^\[(\d{2}/\d{2}/\d{4}), (\d{2}:\d{2}:\d{2})\] ([^:]+): (.+)$"
-        //
-        // Steps:
-        // 1. Read file line by line
-        // 2. Parse each line with regex
-        // 3. Handle multiline messages (lines without timestamp belong to previous message)
-        // 4. Skip system messages (no colon after sender name)
-        // 5. Convert to InternalMessage
-
         Err(format!("WhatsApp parser not yet implemented. File: {}", file_path).into())
     }
 }

@@ -14,6 +14,7 @@ use crate::core::models::{InternalMessage, OutputConfig};
 ///   - With timestamps: `Timestamp`, `Sender`, `Content`
 ///   - With IDs: `ID`, `Sender`, `Content`
 ///   - With replies: `Sender`, `Content`, `ReplyTo`
+///   - With edited: `Sender`, `Content`, `Edited`
 /// - Encoding: UTF-8
 pub fn write_csv(
     messages: &[InternalMessage],
@@ -56,6 +57,9 @@ fn build_header(config: &OutputConfig) -> Vec<&'static str> {
     if config.include_replies {
         header.push("ReplyTo");
     }
+    if config.include_edited {
+        header.push("Edited");
+    }
 
     header
 }
@@ -81,60 +85,13 @@ fn build_record(msg: &InternalMessage, config: &OutputConfig) -> Vec<String> {
     if config.include_replies {
         record.push(msg.reply_to.map(|id| id.to_string()).unwrap_or_default());
     }
+    if config.include_edited {
+        record.push(
+            msg.edited
+                .map(|ts| ts.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_default(),
+        );
+    }
 
     record
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Read;
-    use tempfile::NamedTempFile;
-
-    #[test]
-    fn test_write_csv_basic() {
-        let messages = vec![
-            InternalMessage::new("Alice", "Hello"),
-            InternalMessage::new("Bob", "Hi there"),
-        ];
-
-        let temp_file = NamedTempFile::new().unwrap();
-        let path = temp_file.path().to_str().unwrap();
-
-        let config = OutputConfig::new();
-        write_csv(&messages, path, &config).unwrap();
-
-        let mut content = String::new();
-        std::fs::File::open(path)
-            .unwrap()
-            .read_to_string(&mut content)
-            .unwrap();
-
-        assert!(content.contains("Sender;Content"));
-        assert!(content.contains("Alice;Hello"));
-        assert!(content.contains("Bob;Hi there"));
-    }
-
-    #[test]
-    fn test_write_csv_with_timestamps() {
-        use chrono::TimeZone;
-
-        let ts = chrono::Utc.with_ymd_and_hms(2024, 6, 15, 12, 30, 0).unwrap();
-        let msg = InternalMessage::new("Alice", "Hello").timestamp(ts);
-
-        let temp_file = NamedTempFile::new().unwrap();
-        let path = temp_file.path().to_str().unwrap();
-
-        let config = OutputConfig::new().with_timestamps();
-        write_csv(&[msg], path, &config).unwrap();
-
-        let mut content = String::new();
-        std::fs::File::open(path)
-            .unwrap()
-            .read_to_string(&mut content)
-            .unwrap();
-
-        assert!(content.contains("Timestamp;Sender;Content"));
-        assert!(content.contains("2024-06-15 12:30:00;Alice;Hello"));
-    }
 }

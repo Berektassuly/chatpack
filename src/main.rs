@@ -1,13 +1,13 @@
 //! # chatpack
 //!
 //! Compress chat exports from Telegram, WhatsApp, and Instagram
-//! into token-efficient CSV for LLMs.
+//! into token-efficient formats for LLMs.
 //!
 //! ## Usage
 //! ```bash
-//! chatpack <source> <input_file> [-o output_file]
+//! chatpack <source> <input_file> [-o output_file] [-f format]
 //! chatpack telegram chat.json -o output.csv
-//! chatpack tg chat.json --after 2024-01-01
+//! chatpack tg chat.json --format jsonl
 //! ```
 
 mod cli;
@@ -18,9 +18,10 @@ use std::process;
 
 use clap::Parser;
 
-use cli::Args;
+use cli::{Args, OutputFormat};
 use core::{
-    apply_filters, merge_consecutive, write_csv, FilterConfig, OutputConfig, ProcessingStats,
+    apply_filters, merge_consecutive, write_csv, write_json, write_jsonl,
+    FilterConfig, OutputConfig, ProcessingStats,
 };
 use parsers::create_parser;
 
@@ -37,12 +38,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Create parser for the selected source
     let parser = create_parser(args.source);
 
+    // Determine output extension based on format
+    let output_path = adjust_output_extension(&args.output, args.format);
+
     // Print header
     println!("📦 chatpack v{}", env!("CARGO_PKG_VERSION"));
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("📖 Source:  {}", args.source);
     println!("📂 Input:   {}", args.input);
-    println!("💾 Output:  {}", args.output);
+    println!("💾 Output:  {}", output_path);
+    println!("📄 Format:  {}", args.format);
 
     // Build filter configuration
     let mut filter_config = FilterConfig::new();
@@ -107,13 +112,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if args.replies {
         output_config = output_config.with_replies();
     }
+    if args.edited {
+        output_config = output_config.with_edited();
+    }
 
-    // Step 5: Write output
-    println!("💾 Writing CSV...");
-    write_csv(&final_messages, &args.output, &output_config)?;
+    // Step 5: Write output in selected format
+    println!("💾 Writing {}...", args.format);
+    match args.format {
+        OutputFormat::Csv => write_csv(&final_messages, &output_path, &output_config)?,
+        OutputFormat::Json => write_json(&final_messages, &output_path, &output_config)?,
+        OutputFormat::Jsonl => write_jsonl(&final_messages, &output_path, &output_config)?,
+    }
 
     println!();
-    println!("✅ Done! Token-optimized chat saved to {}", args.output);
+    println!("✅ Done! Output saved to {}", output_path);
 
     // Summary
     if filter_config.is_active() || !args.no_merge {
@@ -127,4 +139,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+/// Adjusts output file extension based on format if using default output.
+fn adjust_output_extension(output: &str, format: OutputFormat) -> String {
+    // If user specified a custom output, use it as-is
+    if output != "optimized_chat.csv" {
+        return output.to_string();
+    }
+
+    // Otherwise, adjust extension based on format
+    match format {
+        OutputFormat::Csv => "optimized_chat.csv".to_string(),
+        OutputFormat::Json => "optimized_chat.json".to_string(),
+        OutputFormat::Jsonl => "optimized_chat.jsonl".to_string(),
+    }
 }
