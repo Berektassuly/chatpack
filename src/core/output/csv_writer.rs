@@ -9,7 +9,7 @@ use crate::core::models::{InternalMessage, OutputConfig};
 ///
 /// # Format
 /// - Delimiter: `;`
-/// - Columns: Depends on OutputConfig
+/// - Columns: Depends on `OutputConfig`
 ///   - Basic: `Sender`, `Content`
 ///   - With timestamps: `Timestamp`, `Sender`, `Content`
 ///   - With IDs: `ID`, `Sender`, `Content`

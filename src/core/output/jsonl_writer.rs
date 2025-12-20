@@ -15,7 +15,7 @@ use serde::Serialize;
 use crate::core::models::{InternalMessage, OutputConfig};
 
 /// Minimal message structure for JSONL output.
-/// Only includes fields enabled in OutputConfig.
+/// Only includes fields enabled in `OutputConfig`.
 #[derive(Serialize)]
 struct JsonlMessage {
     sender: String,
@@ -80,7 +80,7 @@ pub fn write_jsonl(
     for msg in messages {
         let json_msg = JsonlMessage::from_internal(msg, config);
         let line = serde_json::to_string(&json_msg)?;
-        writeln!(writer, "{}", line)?;
+        writeln!(writer, "{line}")?;
     }
 
     writer.flush()?;
