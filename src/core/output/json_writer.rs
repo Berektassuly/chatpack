@@ -9,7 +9,7 @@ use serde::Serialize;
 use crate::core::models::{InternalMessage, OutputConfig};
 
 /// Minimal message structure for JSON output.
-/// Only includes fields enabled in OutputConfig.
+/// Only includes fields enabled in `OutputConfig`.
 #[derive(Serialize)]
 struct JsonMessage {
     sender: String,

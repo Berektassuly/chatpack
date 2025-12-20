@@ -1,6 +1,6 @@
-//! WhatsApp TXT export parser.
+//! `WhatsApp` TXT export parser.
 //!
-//! WhatsApp exports vary by locale. This parser auto-detects the format
+//! `WhatsApp` exports vary by locale. This parser auto-detects the format
 //! by analyzing the first 20 lines of the file.
 //!
 //! Supported formats:
@@ -56,7 +56,7 @@ enum DateFormat {
 
 impl DateFormat {
     /// Returns regex pattern for this date format.
-    fn pattern(&self) -> &'static str {
+    fn pattern(self) -> &'static str {
         match self {
             // [1/15/24, 10:30:45 AM] Sender: Message
             DateFormat::US => {
@@ -234,7 +234,7 @@ fn is_system_message(sender: &str, content: &str) -> bool {
 
 /// Parse timestamp from date and time strings.
 fn parse_timestamp(date_str: &str, time_str: &str, format: DateFormat) -> Option<DateTime<Utc>> {
-    let datetime_str = format!("{}, {}", date_str, time_str);
+    let datetime_str = format!("{date_str}, {time_str}");
 
     for parse_format in format.date_parse_formats() {
         if let Ok(naive) = NaiveDateTime::parse_from_str(&datetime_str, parse_format) {
@@ -279,10 +279,10 @@ impl ChatParser for WhatsAppParser {
 
             if let Some(caps) = regex.captures(line) {
                 // New message starts
-                let date_str = caps.get(1).map(|m| m.as_str()).unwrap_or("");
-                let time_str = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-                let sender = caps.get(3).map(|m| m.as_str().trim()).unwrap_or("");
-                let content = caps.get(4).map(|m| m.as_str()).unwrap_or("");
+                let date_str = caps.get(1).map_or("", |m| m.as_str());
+                let time_str = caps.get(2).map_or("", |m| m.as_str());
+                let sender = caps.get(3).map_or("", |m| m.as_str().trim());
+                let content = caps.get(4).map_or("", |m| m.as_str());
 
                 // Skip system messages
                 if is_system_message(sender, content) {

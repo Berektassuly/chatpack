@@ -1,10 +1,32 @@
 //! Command-line interface definition using clap.
+//!
+//! This module defines:
+//! - [`Args`] - CLI argument structure (for use with clap)
+//! - [`Source`] - Supported chat sources
+//! - [`OutputFormat`] - Output format options
+//!
+//! # Using Source and OutputFormat in Libraries
+//!
+//! These types are designed to be usable outside of CLI context:
+//!
+//! ```rust
+//! use chatpack::cli::{Source, OutputFormat};
+//! use chatpack::parsers::create_parser;
+//!
+//! // Use Source to create a parser
+//! let parser = create_parser(Source::Telegram);
+//!
+//! // OutputFormat can be converted to/from strings
+//! let format = OutputFormat::Csv;
+//! println!("Format: {}", format); // "CSV"
+//! ```
 
 use clap::{Parser, ValueEnum};
+use serde::{Deserialize, Serialize};
 
 /// Compress chat exports from Telegram, WhatsApp, and Instagram
 /// into token-efficient formats for LLMs.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(name = "chatpack")]
 #[command(version, about, long_about = None)]
 #[command(after_help = "EXAMPLES:
@@ -61,18 +83,52 @@ pub struct Args {
     pub from: Option<String>,
 }
 
-/// Supported chat sources
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+/// Supported chat sources.
+///
+/// Each source corresponds to a specific export format:
+/// - [`Telegram`](Source::Telegram) - JSON export from Telegram Desktop
+/// - [`WhatsApp`](Source::WhatsApp) - TXT export from `WhatsApp`
+/// - [`Instagram`](Source::Instagram) - JSON export from Instagram
+///
+/// # Example
+///
+/// ```rust
+/// use chatpack::cli::Source;
+/// use chatpack::parsers::create_parser;
+///
+/// let parser = create_parser(Source::Telegram);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Source {
     /// Telegram JSON export
     #[value(alias = "tg")]
     Telegram,
+
     /// WhatsApp TXT export
     #[value(alias = "wa")]
+    #[serde(alias = "wa")]
     WhatsApp,
+
     /// Instagram JSON export
     #[value(alias = "ig")]
+    #[serde(alias = "ig")]
     Instagram,
+}
+
+impl Source {
+    /// Returns the default file extension for this source.
+    pub fn default_extension(&self) -> &'static str {
+        match self {
+            Source::WhatsApp => "txt",
+            Source::Telegram | Source::Instagram => "json",
+        }
+    }
+
+    /// Returns all supported source names (including aliases).
+    pub fn all_names() -> &'static [&'static str] {
+        &["telegram", "tg", "whatsapp", "wa", "instagram", "ig"]
+    }
 }
 
 impl std::fmt::Display for Source {
@@ -85,16 +141,75 @@ impl std::fmt::Display for Source {
     }
 }
 
-/// Output format options
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+impl std::str::FromStr for Source {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "telegram" | "tg" => Ok(Source::Telegram),
+            "whatsapp" | "wa" => Ok(Source::WhatsApp),
+            "instagram" | "ig" => Ok(Source::Instagram),
+            _ => Err(format!(
+                "Unknown source: '{}'. Expected one of: {}",
+                s,
+                Source::all_names().join(", ")
+            )),
+        }
+    }
+}
+
+/// Output format options.
+///
+/// Different formats serve different purposes:
+/// - [`Csv`](OutputFormat::Csv) - Best for LLM context (13x compression)
+/// - [`Json`](OutputFormat::Json) - Structured array, good for APIs
+/// - [`Jsonl`](OutputFormat::Jsonl) - One JSON per line, ideal for RAG/ML
+///
+/// # Example
+///
+/// ```rust
+/// use chatpack::cli::OutputFormat;
+///
+/// let format = OutputFormat::Jsonl;
+/// println!("Extension: {}", format.extension()); // "jsonl"
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
-    /// CSV with semicolon delimiter (default)
+    /// CSV with semicolon delimiter (default, best for LLMs)
     #[default]
     Csv,
+
     /// JSON array of messages
     Json,
+
     /// JSON Lines - one JSON object per line (ideal for ML/RAG)
     Jsonl,
+}
+
+impl OutputFormat {
+    /// Returns the file extension for this format (without dot).
+    pub fn extension(&self) -> &'static str {
+        match self {
+            OutputFormat::Csv => "csv",
+            OutputFormat::Json => "json",
+            OutputFormat::Jsonl => "jsonl",
+        }
+    }
+
+    /// Returns all supported format names.
+    pub fn all_names() -> &'static [&'static str] {
+        &["csv", "json", "jsonl"]
+    }
+
+    /// Returns the MIME type for this format.
+    pub fn mime_type(&self) -> &'static str {
+        match self {
+            OutputFormat::Csv => "text/csv",
+            OutputFormat::Json => "application/json",
+            OutputFormat::Jsonl => "application/x-ndjson",
+        }
+    }
 }
 
 impl std::fmt::Display for OutputFormat {
@@ -104,5 +219,80 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Json => write!(f, "JSON"),
             OutputFormat::Jsonl => write!(f, "JSONL"),
         }
+    }
+}
+
+impl std::str::FromStr for OutputFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "csv" => Ok(OutputFormat::Csv),
+            "json" => Ok(OutputFormat::Json),
+            "jsonl" | "ndjson" => Ok(OutputFormat::Jsonl),
+            _ => Err(format!(
+                "Unknown format: '{}'. Expected one of: {}",
+                s,
+                OutputFormat::all_names().join(", ")
+            )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_source_display() {
+        assert_eq!(Source::Telegram.to_string(), "Telegram");
+        assert_eq!(Source::WhatsApp.to_string(), "WhatsApp");
+        assert_eq!(Source::Instagram.to_string(), "Instagram");
+    }
+
+    #[test]
+    fn test_source_from_str() {
+        assert_eq!("telegram".parse::<Source>().unwrap(), Source::Telegram);
+        assert_eq!("tg".parse::<Source>().unwrap(), Source::Telegram);
+        assert_eq!("whatsapp".parse::<Source>().unwrap(), Source::WhatsApp);
+        assert_eq!("wa".parse::<Source>().unwrap(), Source::WhatsApp);
+        assert!("unknown".parse::<Source>().is_err());
+    }
+
+    #[test]
+    fn test_format_extension() {
+        assert_eq!(OutputFormat::Csv.extension(), "csv");
+        assert_eq!(OutputFormat::Json.extension(), "json");
+        assert_eq!(OutputFormat::Jsonl.extension(), "jsonl");
+    }
+
+    #[test]
+    fn test_format_from_str() {
+        assert_eq!("csv".parse::<OutputFormat>().unwrap(), OutputFormat::Csv);
+        assert_eq!(
+            "jsonl".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Jsonl
+        );
+        assert_eq!(
+            "ndjson".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Jsonl
+        );
+    }
+
+    #[test]
+    fn test_source_serde() {
+        let source = Source::Telegram;
+        let json = serde_json::to_string(&source).unwrap();
+        assert_eq!(json, "\"telegram\"");
+
+        let parsed: Source = serde_json::from_str("\"wa\"").unwrap();
+        assert_eq!(parsed, Source::WhatsApp);
+    }
+
+    #[test]
+    fn test_format_serde() {
+        let format = OutputFormat::Jsonl;
+        let json = serde_json::to_string(&format).unwrap();
+        assert_eq!(json, "\"jsonl\"");
     }
 }

@@ -139,11 +139,10 @@ fn extract_text(text_value: &Value) -> String {
                 Value::Object(obj) => obj
                     .get("text")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string()),
+                    .map(ToString::to_string), // ← исправлено
                 _ => None,
             })
-            .collect::<Vec<_>>()
-            .join(""),
+            .collect::<String>(), // ← исправлено (убрали .join(""))
         _ => String::new(),
     }
 }

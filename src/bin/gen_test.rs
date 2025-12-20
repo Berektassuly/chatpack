@@ -1,6 +1,6 @@
 //! Toxic test data generator for stress testing chatpack.
 //!
-//! Usage: cargo run --bin gen_test -- [messages] [output]
+//! Usage: `cargo run --bin gen_test -- [messages] [output]`
 //! Example: cargo run --bin gen_test -- 100000 heavy_test.json
 
 use rand::Rng;

@@ -65,7 +65,7 @@ impl ChatParser for InstagramParser {
         let content = fs::read_to_string(file_path)?;
 
         let export: InstagramExport = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse Instagram JSON: {}", e))?;
+            .map_err(|e| format!("Failed to parse Instagram JSON: {e}"))?;
 
         let mut messages: Vec<InternalMessage> = export
             .messages

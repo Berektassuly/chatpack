@@ -1,7 +1,6 @@
-//! # chatpack
+//! # chatpack CLI
 //!
-//! Compress chat exports from Telegram, WhatsApp, and Instagram
-//! into token-efficient formats for LLMs.
+//! Command-line interface for chatpack library.
 //!
 //! ## Usage
 //! ```bash
@@ -10,21 +9,18 @@
 //! chatpack tg chat.json --format jsonl
 //! ```
 
-mod cli;
-mod core;
-mod parsers;
-
 use std::process;
 use std::time::Instant;
 
 use clap::Parser;
 
-use cli::{Args, OutputFormat};
-use core::{
+// Import from the library - NOT declaring modules
+use chatpack::cli::{Args, OutputFormat};
+use chatpack::core::{
     FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive, write_csv,
     write_json, write_jsonl,
 };
-use parsers::create_parser;
+use chatpack::parsers::create_parser;
 
 fn main() {
     if let Err(e) = run() {

@@ -1,60 +1,171 @@
 //! Message filtering by date and sender.
+//!
+//! This module provides filtering capabilities for chat messages:
+//! - Filter by date range (after/before)
+//! - Filter by sender name (case-insensitive)
+//!
+//! # Example
+//!
+//! ```rust
+//! use chatpack::core::filter::{FilterConfig, apply_filters};
+//! use chatpack::core::models::InternalMessage;
+//!
+//! let messages = vec![
+//!     InternalMessage::new("Alice", "Hello"),
+//!     InternalMessage::new("Bob", "Hi there"),
+//!     InternalMessage::new("Alice", "How are you?"),
+//! ];
+//!
+//! // Filter to only Alice's messages
+//! let config = FilterConfig::new().with_user("Alice".to_string());
+//! let filtered = apply_filters(messages, &config);
+//!
+//! assert_eq!(filtered.len(), 2);
+//! ```
 
 use chrono::{DateTime, NaiveDate, Utc};
 
 use super::models::InternalMessage;
 
 /// Configuration for filtering messages.
+///
+/// Use the builder pattern to construct filter configurations:
+///
+/// ```rust
+/// use chatpack::core::filter::FilterConfig;
+///
+/// let config = FilterConfig::new()
+///     .after_date("2024-01-01").unwrap()
+///     .before_date("2024-12-31").unwrap()
+///     .with_user("Alice".to_string());
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct FilterConfig {
     /// Only include messages after this date
     pub after: Option<DateTime<Utc>>,
     /// Only include messages before this date
     pub before: Option<DateTime<Utc>>,
-    /// Only include messages from this sender
+    /// Only include messages from this sender (case-insensitive)
     pub from: Option<String>,
 }
 
 impl FilterConfig {
+    /// Creates a new empty filter configuration.
+    ///
+    /// No filters are active by default.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Parse date string in YYYY-MM-DD format and set as "after" filter.
-    /// The time is set to 00:00:00 UTC.
+    ///
+    /// The time is set to 00:00:00 UTC, so the specified date is included.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FilterError::InvalidDateFormat`] if the date string
+    /// doesn't match YYYY-MM-DD format.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use chatpack::core::filter::FilterConfig;
+    ///
+    /// let config = FilterConfig::new()
+    ///     .after_date("2024-01-01")
+    ///     .unwrap();
+    /// ```
     pub fn after_date(mut self, date_str: &str) -> Result<Self, FilterError> {
-        let dt = parse_date(date_str)?;
+        let dt = parse_date_start(date_str)?;
         self.after = Some(dt);
         Ok(self)
     }
 
     /// Parse date string in YYYY-MM-DD format and set as "before" filter.
-    /// The time is set to 23:59:59 UTC to include the entire day.
+    ///
+    /// The time is set to 23:59:59 UTC to include the entire specified day.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FilterError::InvalidDateFormat`] if the date string
+    /// doesn't match YYYY-MM-DD format.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use chatpack::core::filter::FilterConfig;
+    ///
+    /// let config = FilterConfig::new()
+    ///     .before_date("2024-12-31")
+    ///     .unwrap();
+    /// ```
     pub fn before_date(mut self, date_str: &str) -> Result<Self, FilterError> {
         let naive = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
             .map_err(|_| FilterError::InvalidDateFormat(date_str.to_string()))?;
 
-        // End of the day
+        // End of the day to include the full day
         let naive_dt = naive.and_hms_opt(23, 59, 59).unwrap();
         let dt = naive_dt.and_utc();
         self.before = Some(dt);
         Ok(self)
     }
 
+    /// Set a `DateTime<Utc>` directly as the "after" filter.
+    /// Use this when you already have a parsed `DateTime`.
+    #[must_use]
+    pub fn with_after(mut self, dt: DateTime<Utc>) -> Self {
+        self.after = Some(dt);
+        self
+    }
+
+    /// Set a `DateTime<Utc>` directly as the "before" filter.
+    ///
+    /// Use this when you already have a parsed `DateTime`.
+    #[must_use]
+    pub fn with_before(mut self, dt: DateTime<Utc>) -> Self {
+        self.before = Some(dt);
+        self
+    }
+
     /// Set the sender filter.
+    ///
+    /// Filtering is case-insensitive for ASCII characters.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use chatpack::core::filter::FilterConfig;
+    ///
+    /// // Both "Alice" and "alice" will match
+    /// let config = FilterConfig::new()
+    ///     .with_user("Alice".to_string());
+    /// ```
+    #[must_use]
     pub fn with_user(mut self, user: String) -> Self {
         self.from = Some(user);
         self
     }
 
     /// Check if any filter is active.
+    ///
+    /// Returns `true` if at least one of after, before, or from is set.
     pub fn is_active(&self) -> bool {
         self.after.is_some() || self.before.is_some() || self.from.is_some()
+    }
+
+    /// Check if date filters are active.
+    pub fn has_date_filter(&self) -> bool {
+        self.after.is_some() || self.before.is_some()
+    }
+
+    /// Check if sender filter is active.
+    pub fn has_user_filter(&self) -> bool {
+        self.from.is_some()
     }
 }
 
 /// Errors that can occur during filtering.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FilterError {
     /// Invalid date format (expected YYYY-MM-DD)
     InvalidDateFormat(String),
@@ -64,7 +175,7 @@ impl std::fmt::Display for FilterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FilterError::InvalidDateFormat(s) => {
-                write!(f, "Invalid date format: '{}'. Expected YYYY-MM-DD", s)
+                write!(f, "Invalid date format: '{s}'. Expected YYYY-MM-DD")
             }
         }
     }
@@ -72,8 +183,8 @@ impl std::fmt::Display for FilterError {
 
 impl std::error::Error for FilterError {}
 
-/// Parse a date string in YYYY-MM-DD format to DateTime<Utc>.
-fn parse_date(date_str: &str) -> Result<DateTime<Utc>, FilterError> {
+/// Parse a date string in YYYY-MM-DD format to `DateTime`<Utc> at start of day.
+fn parse_date_start(date_str: &str) -> Result<DateTime<Utc>, FilterError> {
     let naive = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
         .map_err(|_| FilterError::InvalidDateFormat(date_str.to_string()))?;
 
@@ -84,9 +195,34 @@ fn parse_date(date_str: &str) -> Result<DateTime<Utc>, FilterError> {
 
 /// Apply filters to a vector of messages.
 ///
-/// Note: Messages without timestamps are excluded when date filters are active.
-/// This ensures consistent behavior - if you're filtering by date, you probably
-/// want messages with known dates.
+/// # Behavior
+///
+/// - Messages matching all active filters are kept
+/// - Sender matching is case-insensitive (ASCII)
+/// - Messages without timestamps are **excluded** when date filters are active
+///
+/// # Performance
+///
+/// This function consumes the input vector and returns a new filtered vector.
+/// For large datasets, consider streaming approaches.
+///
+/// # Example
+///
+/// ```rust
+/// use chatpack::core::filter::{FilterConfig, apply_filters};
+/// use chatpack::core::models::InternalMessage;
+///
+/// let messages = vec![
+///     InternalMessage::new("Alice", "Hello"),
+///     InternalMessage::new("Bob", "Hi"),
+/// ];
+///
+/// let config = FilterConfig::new().with_user("Alice".to_string());
+/// let filtered = apply_filters(messages, &config);
+///
+/// assert_eq!(filtered.len(), 1);
+/// assert_eq!(filtered[0].sender, "Alice");
+/// ```
 pub fn apply_filters(
     messages: Vec<InternalMessage>,
     config: &FilterConfig,
@@ -98,15 +234,15 @@ pub fn apply_filters(
     messages
         .into_iter()
         .filter(|msg| {
-            // Filter by sender
-            if let Some(ref from) = config.from
-                && !msg.sender.eq_ignore_ascii_case(from)
-            {
-                return false;
+            // Filter by sender (case-insensitive)
+            if let Some(ref from) = config.from {
+                if !msg.sender.eq_ignore_ascii_case(from) {
+                    return false;
+                }
             }
 
             // Filter by date (only if message has timestamp)
-            if config.after.is_some() || config.before.is_some() {
+            if config.has_date_filter() {
                 match msg.timestamp {
                     Some(ts) => {
                         if config.after.is_some_and(|after| ts < after) {
@@ -131,6 +267,7 @@ pub fn apply_filters(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     fn make_msg(sender: &str, content: &str, ts: Option<&str>) -> InternalMessage {
         let mut msg = InternalMessage::new(sender, content);
@@ -206,5 +343,45 @@ mod tests {
     fn test_invalid_date_format() {
         let result = FilterConfig::new().after_date("01-01-2024");
         assert!(result.is_err());
+        assert!(matches!(result, Err(FilterError::InvalidDateFormat(_))));
+    }
+
+    #[test]
+    fn test_combined_filters() {
+        let messages = vec![
+            make_msg("Alice", "Old Alice", Some("2024-01-01")),
+            make_msg("Alice", "New Alice", Some("2024-06-15")),
+            make_msg("Bob", "New Bob", Some("2024-06-15")),
+        ];
+
+        let config = FilterConfig::new()
+            .after_date("2024-06-01")
+            .unwrap()
+            .with_user("Alice".to_string());
+
+        let filtered = apply_filters(messages, &config);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].sender, "Alice");
+        assert_eq!(filtered[0].content, "New Alice");
+    }
+
+    #[test]
+    fn test_with_datetime_directly() {
+        let dt = Utc.with_ymd_and_hms(2024, 6, 1, 0, 0, 0).unwrap();
+        let config = FilterConfig::new().with_after(dt);
+        assert_eq!(config.after, Some(dt));
+    }
+
+    #[test]
+    fn test_is_active() {
+        assert!(!FilterConfig::new().is_active());
+        assert!(FilterConfig::new().with_user("Alice".into()).is_active());
+        assert!(
+            FilterConfig::new()
+                .after_date("2024-01-01")
+                .unwrap()
+                .is_active()
+        );
     }
 }
