@@ -282,17 +282,17 @@ pub mod prelude {
     pub use crate::core::models::{InternalMessage, OutputConfig};
 
     // Filtering
-    pub use crate::core::filter::{apply_filters, FilterConfig, FilterError};
+    pub use crate::core::filter::{FilterConfig, FilterError, apply_filters};
 
     // Processing
-    pub use crate::core::processor::{merge_consecutive, ProcessingStats};
+    pub use crate::core::processor::{ProcessingStats, merge_consecutive};
 
     // Output
     pub use crate::core::output::{write_csv, write_json, write_jsonl};
 
     // Parsers
     pub use crate::parsers::{
-        create_parser, ChatParser, InstagramParser, TelegramParser, WhatsAppParser,
+        ChatParser, InstagramParser, TelegramParser, WhatsAppParser, create_parser,
     };
 
     // CLI types
