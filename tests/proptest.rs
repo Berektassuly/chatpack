@@ -26,7 +26,7 @@ fn arb_message() -> impl Strategy<Value = InternalMessage> {
             "Good morning".to_string(),
             "Test message 123".to_string(),
             "Привет мир".to_string(),
-            "".to_string(),
+            String::new(),
             "   ".to_string(),
             "Special;chars\"here\nnewline".to_string(),
             "🎉🔥💀 emoji".to_string(),
@@ -150,7 +150,7 @@ proptest! {
     /// Unicode content is handled correctly
     #[test]
     fn unicode_content_preserved(idx in 0usize..5) {
-        let contents = vec!["Привет", "こんにちは", "مرحبا", "🎉🔥💀", "Mixed Тест 日本"];
+        let contents = ["Привет", "こんにちは", "مرحبا", "🎉🔥💀", "Mixed Тест 日本"];
         let content = contents[idx].to_string();
         let msg = InternalMessage {
             sender: "User".to_string(),
@@ -246,7 +246,7 @@ mod edge_cases {
         let messages = vec![
             InternalMessage {
                 sender: "Alice".into(),
-                content: "".into(),
+                content: String::new(),
                 timestamp: None,
                 id: None,
                 reply_to: None,

@@ -230,7 +230,7 @@ mod tests {
     #[test]
     fn test_compression_ratio_zero() {
         let stats = ProcessingStats::new(0, 0);
-        assert_eq!(stats.compression_ratio(), 0.0);
+        assert!((stats.compression_ratio() - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
