@@ -1,6 +1,6 @@
 //! Additional tests for CLI module to improve coverage
 
-use chatpack::cli::{Source, OutputFormat};
+use chatpack::cli::{OutputFormat, Source};
 use std::str::FromStr;
 
 #[test]
@@ -9,12 +9,12 @@ fn test_source_from_str_all_variants() {
     assert!(Source::from_str("telegram").is_ok());
     assert!(Source::from_str("whatsapp").is_ok());
     assert!(Source::from_str("instagram").is_ok());
-    
+
     // Aliases
     assert!(Source::from_str("tg").is_ok());
     assert!(Source::from_str("wa").is_ok());
     assert!(Source::from_str("ig").is_ok());
-    
+
     // Case variations
     assert!(Source::from_str("TELEGRAM").is_ok());
     assert!(Source::from_str("Telegram").is_ok());
@@ -36,7 +36,7 @@ fn test_output_format_from_str_all_variants() {
     assert!(OutputFormat::from_str("json").is_ok());
     assert!(OutputFormat::from_str("jsonl").is_ok());
     assert!(OutputFormat::from_str("csv").is_ok());
-    
+
     // Case variations
     assert!(OutputFormat::from_str("JSON").is_ok());
     assert!(OutputFormat::from_str("JSONL").is_ok());
@@ -68,14 +68,14 @@ fn test_output_format_equality() {
 #[test]
 fn test_source_copy() {
     let source = Source::Telegram;
-    let copied = source;  // Copy, not clone
+    let copied = source; // Copy, not clone
     assert_eq!(source, copied);
 }
 
 #[test]
 fn test_output_format_copy() {
     let format = OutputFormat::Json;
-    let copied = format;  // Copy, not clone
+    let copied = format; // Copy, not clone
     assert_eq!(format, copied);
 }
 
@@ -94,23 +94,23 @@ fn test_output_format_debug() {
 #[test]
 fn test_source_hash() {
     use std::collections::HashSet;
-    
+
     let mut set = HashSet::new();
     set.insert(Source::Telegram);
     set.insert(Source::WhatsApp);
     set.insert(Source::Telegram); // duplicate
-    
+
     assert_eq!(set.len(), 2);
 }
 
 #[test]
 fn test_output_format_hash() {
     use std::collections::HashSet;
-    
+
     let mut set = HashSet::new();
     set.insert(OutputFormat::Json);
     set.insert(OutputFormat::Jsonl);
     set.insert(OutputFormat::Json); // duplicate
-    
+
     assert_eq!(set.len(), 2);
 }

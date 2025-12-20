@@ -1,7 +1,7 @@
 //! Integration tests for parsers with real files
 
-use chatpack::prelude::*;
 use chatpack::core::{FilterConfig, ProcessingStats};
+use chatpack::prelude::*;
 use std::fs;
 use std::path::Path;
 use std::sync::Once;
@@ -18,7 +18,7 @@ fn ensure_fixtures() {
         if !Path::new(dir).exists() {
             fs::create_dir_all(dir).unwrap();
         }
-        
+
         // Telegram: Simple with explicit timestamps and unixtime for robustness
         let telegram_simple = r#"{
   "name": "Test Chat",
@@ -32,7 +32,7 @@ fn ensure_fixtures() {
   ]
 }"#;
         fs::write(format!("{dir}/telegram_simple.json"), telegram_simple).unwrap();
-        
+
         // Telegram: Complex
         let telegram_complex = r#"{
   "name": "Complex Chat",
@@ -56,7 +56,7 @@ fn ensure_fixtures() {
   ]
 }"#;
         fs::write(format!("{dir}/telegram_complex.json"), telegram_complex).unwrap();
-        
+
         // WhatsApp: iOS Bracketed Format (Reliable detection)
         let whatsapp_us = "[1/15/24, 10:30:00 AM] Alice: Hello everyone!
 [1/15/24, 10:31:00 AM] Bob: Hi Alice!
@@ -67,7 +67,7 @@ fn ensure_fixtures() {
 [1/15/24, 10:35:00 AM] Alice: <Media omitted>
 [1/15/24, 10:36:00 AM] Alice: Check out this link https://example.com";
         fs::write(format!("{dir}/whatsapp_us.txt"), whatsapp_us).unwrap();
-        
+
         // WhatsApp: EU Format
         let whatsapp_eu = "[15.01.24, 10:30:00] Alice: Привет всем!
 [15.01.24, 10:31:00] Bob: Привет!
@@ -76,7 +76,7 @@ fn ensure_fixtures() {
 [15.01.24, 10:34:00] Charlie: Сообщения и звонки защищены сквозным шифрованием.
 [15.01.24, 10:35:00] Bob: Все отлично!";
         fs::write(format!("{dir}/whatsapp_eu.txt"), whatsapp_eu).unwrap();
-        
+
         // Instagram: Full structure with magic_words to ensure auto-detection
         let instagram = r#"{
   "participants": [
@@ -153,8 +153,10 @@ mod telegram_tests {
     fn test_parse_simple_chat() {
         ensure_fixtures();
         let parser = create_parser(Source::Telegram);
-        let messages = parser.parse(&format!("{}/telegram_simple.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .unwrap();
+
         assert_eq!(messages.len(), 4);
         assert_eq!(messages[0].sender, "Alice");
         assert_eq!(messages[0].content, "Hello!");
@@ -166,14 +168,16 @@ mod telegram_tests {
     fn test_parse_complex_chat() {
         ensure_fixtures();
         let parser = create_parser(Source::Telegram);
-        let messages = parser.parse(&format!("{}/telegram_complex.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/telegram_complex.json", fixtures_dir()))
+            .unwrap();
+
         assert!(messages.len() >= 2);
         assert!(messages[0].content.contains("https://example.com"));
-        
+
         let has_reply = messages.iter().any(|m| m.reply_to.is_some());
         assert!(has_reply);
-        
+
         let has_edited = messages.iter().any(|m| m.edited.is_some());
         assert!(has_edited);
     }
@@ -182,11 +186,13 @@ mod telegram_tests {
     fn test_merge_consecutive() {
         ensure_fixtures();
         let parser = create_parser(Source::Telegram);
-        let messages = parser.parse(&format!("{}/telegram_simple.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .unwrap();
+
         let original_count = messages.len();
         let merged = merge_consecutive(messages);
-        
+
         assert!(merged.len() <= original_count);
     }
 
@@ -208,10 +214,12 @@ mod whatsapp_tests {
     fn test_parse_us_format() {
         ensure_fixtures();
         let parser = create_parser(Source::WhatsApp);
-        let messages = parser.parse(&format!("{}/whatsapp_us.txt", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .unwrap();
+
         assert!(!messages.is_empty());
-        
+
         let senders: Vec<&str> = messages.iter().map(|m| m.sender.as_str()).collect();
         assert!(senders.contains(&"Alice"));
         assert!(senders.contains(&"Bob"));
@@ -221,8 +229,10 @@ mod whatsapp_tests {
     fn test_parse_eu_format() {
         ensure_fixtures();
         let parser = create_parser(Source::WhatsApp);
-        let messages = parser.parse(&format!("{}/whatsapp_eu.txt", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/whatsapp_eu.txt", fixtures_dir()))
+            .unwrap();
+
         assert!(!messages.is_empty());
         let has_cyrillic = messages.iter().any(|m| m.content.contains("Привет"));
         assert!(has_cyrillic);
@@ -232,12 +242,13 @@ mod whatsapp_tests {
     fn test_system_messages_filtered() {
         ensure_fixtures();
         let parser = create_parser(Source::WhatsApp);
-        let messages = parser.parse(&format!("{}/whatsapp_us.txt", fixtures_dir())).unwrap();
-        
-        let has_system = messages.iter().any(|m| 
-            m.content.contains("end-to-end encrypted") ||
-            m.content.contains("сквозным шифрованием")
-        );
+        let messages = parser
+            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .unwrap();
+
+        let has_system = messages.iter().any(|m| {
+            m.content.contains("end-to-end encrypted") || m.content.contains("сквозным шифрованием")
+        });
         assert!(!has_system);
     }
 
@@ -245,8 +256,10 @@ mod whatsapp_tests {
     fn test_media_preserved() {
         ensure_fixtures();
         let parser = create_parser(Source::WhatsApp);
-        let messages = parser.parse(&format!("{}/whatsapp_us.txt", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .unwrap();
+
         let has_media = messages.iter().any(|m| m.content.contains("Media omitted"));
         assert!(has_media);
     }
@@ -261,11 +274,13 @@ mod whatsapp_tests {
     fn test_consecutive_merge() {
         ensure_fixtures();
         let parser = create_parser(Source::WhatsApp);
-        let messages = parser.parse(&format!("{}/whatsapp_us.txt", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .unwrap();
+
         let original = messages.len();
         let merged = merge_consecutive(messages);
-        
+
         assert!(merged.len() <= original);
     }
 }
@@ -281,10 +296,12 @@ mod instagram_tests {
     fn test_parse_instagram() {
         ensure_fixtures();
         let parser = create_parser(Source::Instagram);
-        let messages = parser.parse(&format!("{}/instagram.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/instagram.json", fixtures_dir()))
+            .unwrap();
+
         assert!(!messages.is_empty());
-        
+
         let senders: Vec<&str> = messages.iter().map(|m| m.sender.as_str()).collect();
         assert!(senders.contains(&"user_one"));
         assert!(senders.contains(&"user_two"));
@@ -294,12 +311,13 @@ mod instagram_tests {
     fn test_shared_links() {
         ensure_fixtures();
         let parser = create_parser(Source::Instagram);
-        let messages = parser.parse(&format!("{}/instagram.json", fixtures_dir())).unwrap();
-        
-        let has_shared = messages.iter().any(|m| 
-            m.content.contains("Shared") || 
-            m.content.contains("https://instagram.com/p/xyz")
-        );
+        let messages = parser
+            .parse(&format!("{}/instagram.json", fixtures_dir()))
+            .unwrap();
+
+        let has_shared = messages.iter().any(|m| {
+            m.content.contains("Shared") || m.content.contains("https://instagram.com/p/xyz")
+        });
         assert!(has_shared, "Should contain 'Shared' or the actual link");
     }
 
@@ -307,8 +325,10 @@ mod instagram_tests {
     fn test_empty_content_filtered() {
         ensure_fixtures();
         let parser = create_parser(Source::Instagram);
-        let messages = parser.parse(&format!("{}/instagram.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/instagram.json", fixtures_dir()))
+            .unwrap();
+
         let has_empty = messages.iter().any(|m| m.content.is_empty());
         assert!(!has_empty);
     }
@@ -323,8 +343,10 @@ mod instagram_tests {
     fn test_timestamps() {
         ensure_fixtures();
         let parser = create_parser(Source::Instagram);
-        let messages = parser.parse(&format!("{}/instagram.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/instagram.json", fixtures_dir()))
+            .unwrap();
+
         assert!(messages.iter().all(|m| m.timestamp.is_some()));
     }
 }
@@ -340,11 +362,13 @@ mod filter_integration_tests {
     fn test_filter_by_sender() {
         ensure_fixtures();
         let parser = create_parser(Source::Telegram);
-        let messages = parser.parse(&format!("{}/telegram_simple.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .unwrap();
+
         let config = FilterConfig::new().with_user("Alice".to_string());
         let filtered = apply_filters(messages, &config);
-        
+
         assert!(filtered.iter().all(|m| m.sender == "Alice"));
     }
 
@@ -352,12 +376,16 @@ mod filter_integration_tests {
     fn test_filter_by_date() {
         ensure_fixtures();
         let parser = create_parser(Source::Telegram);
-        let messages = parser.parse(&format!("{}/telegram_simple.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .unwrap();
+
         let config = FilterConfig::new()
-            .after_date("2024-01-14").unwrap()
-            .before_date("2024-01-16").unwrap();
-        
+            .after_date("2024-01-14")
+            .unwrap()
+            .before_date("2024-01-16")
+            .unwrap();
+
         let filtered = apply_filters(messages.clone(), &config);
         assert_eq!(filtered.len(), messages.len());
     }
@@ -366,11 +394,12 @@ mod filter_integration_tests {
     fn test_filter_excludes_outside_range() {
         ensure_fixtures();
         let parser = create_parser(Source::Telegram);
-        let messages = parser.parse(&format!("{}/telegram_simple.json", fixtures_dir())).unwrap();
-        
-        let config = FilterConfig::new()
-            .before_date("2024-01-01").unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .unwrap();
+
+        let config = FilterConfig::new().before_date("2024-01-01").unwrap();
+
         let filtered = apply_filters(messages, &config);
         assert!(filtered.is_empty());
     }
@@ -379,12 +408,18 @@ mod filter_integration_tests {
     fn test_combined_filters() {
         ensure_fixtures();
         let parser = create_parser(Source::WhatsApp);
-        let messages = parser.parse(&format!("{}/whatsapp_us.txt", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .unwrap();
+
         let config = FilterConfig::new().with_user("Alice".to_string());
         let filtered = apply_filters(messages, &config);
-        
-        assert!(filtered.iter().all(|m| m.sender.eq_ignore_ascii_case("Alice")));
+
+        assert!(
+            filtered
+                .iter()
+                .all(|m| m.sender.eq_ignore_ascii_case("Alice"))
+        );
     }
 }
 
@@ -399,13 +434,15 @@ mod stats_tests {
     fn test_stats_with_real_data() {
         ensure_fixtures();
         let parser = create_parser(Source::Telegram);
-        let messages = parser.parse(&format!("{}/telegram_simple.json", fixtures_dir())).unwrap();
-        
+        let messages = parser
+            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .unwrap();
+
         let original = messages.len();
         let merged = merge_consecutive(messages);
-        
+
         let stats = ProcessingStats::new(original, merged.len());
-        
+
         assert_eq!(stats.original_count, original);
         assert!(stats.compression_ratio() >= 0.0);
         assert!(stats.compression_ratio() <= 100.0);
@@ -415,7 +452,7 @@ mod stats_tests {
     fn test_stats_display() {
         let stats = ProcessingStats::new(100, 80);
         let display = format!("{stats}");
-        
+
         assert!(display.contains("100"));
         assert!(display.contains("80"));
     }
@@ -423,7 +460,7 @@ mod stats_tests {
     #[test]
     fn test_stats_with_filtered() {
         let stats = ProcessingStats::new(100, 50).with_filtered(75);
-        
+
         assert_eq!(stats.filtered_count, Some(75));
         assert_eq!(stats.messages_saved(), 25);
     }
@@ -442,7 +479,7 @@ mod parse_auto_tests {
         ensure_fixtures();
         let result = parse_auto(&format!("{}/telegram_simple.json", fixtures_dir()));
         assert!(result.is_ok());
-        
+
         let messages = result.unwrap();
         assert!(!messages.is_empty());
     }
@@ -486,10 +523,8 @@ mod output_config_tests {
 
     #[test]
     fn test_output_config_builder() {
-        let config = OutputConfig::new()
-            .with_ids()
-            .with_replies();
-        
+        let config = OutputConfig::new().with_ids().with_replies();
+
         assert!(config.include_ids);
         assert!(config.include_replies);
     }
@@ -498,7 +533,7 @@ mod output_config_tests {
     fn test_output_config_has_any() {
         let config = OutputConfig::new().with_ids();
         assert!(config.has_any());
-        
+
         let empty = OutputConfig {
             include_timestamps: false,
             include_ids: false,
@@ -521,13 +556,13 @@ mod message_tests {
     fn test_message_builder_chain() {
         let ts = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
         let edit_ts = Utc.with_ymd_and_hms(2024, 1, 15, 11, 0, 0).unwrap();
-        
+
         let msg = InternalMessage::new("Alice", "Hello")
             .with_id(123)
             .with_timestamp(ts)
             .with_reply_to(122)
             .with_edited(edit_ts);
-        
+
         assert_eq!(msg.sender, "Alice");
         assert_eq!(msg.content, "Hello");
         assert_eq!(msg.id, Some(123));
@@ -540,7 +575,7 @@ mod message_tests {
     fn test_message_has_metadata() {
         let simple = InternalMessage::new("Bob", "Hi");
         assert!(!simple.has_metadata());
-        
+
         let with_id = InternalMessage::new("Bob", "Hi").with_id(1);
         assert!(with_id.has_metadata());
     }
@@ -549,7 +584,7 @@ mod message_tests {
     fn test_message_is_empty() {
         let empty = InternalMessage::new("Alice", "");
         assert!(empty.is_empty());
-        
+
         let not_empty = InternalMessage::new("Alice", "Hello");
         assert!(!not_empty.is_empty());
     }
@@ -558,7 +593,7 @@ mod message_tests {
     fn test_message_clone() {
         let msg = InternalMessage::new("Alice", "Hello").with_id(1);
         let cloned = msg.clone();
-        
+
         assert_eq!(msg.sender, cloned.sender);
         assert_eq!(msg.content, cloned.content);
         assert_eq!(msg.id, cloned.id);
@@ -568,7 +603,7 @@ mod message_tests {
     fn test_message_debug() {
         let msg = InternalMessage::new("Alice", "Hello");
         let debug = format!("{msg:?}");
-        
+
         assert!(debug.contains("Alice"));
         assert!(debug.contains("Hello"));
     }
@@ -578,7 +613,7 @@ mod message_tests {
         let msg1 = InternalMessage::new("Alice", "Hello");
         let msg2 = InternalMessage::new("Alice", "Hello");
         let msg3 = InternalMessage::new("Bob", "Hello");
-        
+
         assert_eq!(msg1, msg2);
         assert_ne!(msg1, msg3);
     }
@@ -618,7 +653,10 @@ mod cli_tests {
     #[test]
     fn test_output_format_from_str() {
         assert_eq!(OutputFormat::from_str("json").unwrap(), OutputFormat::Json);
-        assert_eq!(OutputFormat::from_str("jsonl").unwrap(), OutputFormat::Jsonl);
+        assert_eq!(
+            OutputFormat::from_str("jsonl").unwrap(),
+            OutputFormat::Jsonl
+        );
         assert_eq!(OutputFormat::from_str("csv").unwrap(), OutputFormat::Csv);
     }
 
@@ -691,7 +729,7 @@ mod error_tests {
         ensure_fixtures();
         let dir = fixtures_dir();
         fs::write(format!("{dir}/invalid.json"), "not valid json").unwrap();
-        
+
         let parser = create_parser(Source::Telegram);
         let result = parser.parse(&format!("{dir}/invalid.json"));
         assert!(result.is_err());
@@ -725,10 +763,10 @@ mod serde_tests {
         let msg = InternalMessage::new("Alice", "Hello")
             .with_id(1)
             .with_timestamp(ts);
-        
+
         let json = serde_json::to_string(&msg).unwrap();
         let deserialized: InternalMessage = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(msg, deserialized);
     }
 
@@ -737,7 +775,7 @@ mod serde_tests {
         let source = Source::Telegram;
         let json = serde_json::to_string(&source).unwrap();
         let deserialized: Source = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(source, deserialized);
     }
 
@@ -746,7 +784,7 @@ mod serde_tests {
         let format = OutputFormat::Json;
         let json = serde_json::to_string(&format).unwrap();
         let deserialized: OutputFormat = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(format, deserialized);
     }
 
@@ -755,7 +793,7 @@ mod serde_tests {
         let config = OutputConfig::all();
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: OutputConfig = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(config.include_timestamps, deserialized.include_timestamps);
         assert_eq!(config.include_ids, deserialized.include_ids);
     }
