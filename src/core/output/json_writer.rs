@@ -51,7 +51,7 @@ impl JsonMessage {
     }
 }
 
-/// Writes messages to JSON as an array.
+/// Writes messages to JSON file as an array.
 ///
 /// # Format
 /// ```json
@@ -65,17 +65,26 @@ pub fn write_json(
     output_path: &str,
     config: &OutputConfig,
 ) -> Result<(), Box<dyn Error>> {
+    let json = to_json(messages, config)?;
+    let mut file = File::create(output_path)?;
+    file.write_all(json.as_bytes())?;
+    Ok(())
+}
+
+/// Converts messages to JSON string as an array.
+///
+/// Same format as `write_json`, but returns a String instead of writing to file.
+/// Useful for WASM environments where file system access is not available.
+pub fn to_json(
+    messages: &[InternalMessage],
+    config: &OutputConfig,
+) -> Result<String, Box<dyn Error>> {
     let json_messages: Vec<JsonMessage> = messages
         .iter()
         .map(|m| JsonMessage::from_internal(m, config))
         .collect();
 
-    let json = serde_json::to_string_pretty(&json_messages)?;
-
-    let mut file = File::create(output_path)?;
-    file.write_all(json.as_bytes())?;
-
-    Ok(())
+    Ok(serde_json::to_string_pretty(&json_messages)?)
 }
 
 #[cfg(test)]
@@ -83,6 +92,21 @@ mod tests {
     use super::*;
     use std::io::Read;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_to_json_basic() {
+        let messages = vec![
+            InternalMessage::new("Alice", "Hello"),
+            InternalMessage::new("Bob", "Hi"),
+        ];
+        let config = OutputConfig::new();
+
+        let json = to_json(&messages, &config).unwrap();
+
+        assert!(json.contains(r#""sender": "Alice""#));
+        assert!(json.contains(r#""content": "Hello""#));
+        assert!(!json.contains("timestamp"));
+    }
 
     #[test]
     fn test_write_json_basic() {

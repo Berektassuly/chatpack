@@ -10,8 +10,7 @@
 //! - RU: `15.01.2024, 10:30 - Sender: Message`
 
 use std::error::Error;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fs;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
@@ -130,7 +129,7 @@ impl FormatDetector {
 }
 
 /// Auto-detect date format by analyzing first N lines.
-fn detect_format(lines: &[String]) -> Option<DateFormat> {
+fn detect_format(lines: &[&str]) -> Option<DateFormat> {
     let detectors = [
         FormatDetector::new(DateFormat::US),
         FormatDetector::new(DateFormat::EuDotBracketed),
@@ -251,9 +250,12 @@ impl ChatParser for WhatsAppParser {
     }
 
     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-        let file = File::open(file_path)?;
-        let reader = BufReader::new(file);
-        let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
+        let content = fs::read_to_string(file_path)?;
+        self.parse_str(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+        let lines: Vec<&str> = content.lines().collect();
 
         if lines.is_empty() {
             return Ok(vec![]);
@@ -282,17 +284,19 @@ impl ChatParser for WhatsAppParser {
                 let date_str = caps.get(1).map_or("", |m| m.as_str());
                 let time_str = caps.get(2).map_or("", |m| m.as_str());
                 let sender = caps.get(3).map_or("", |m| m.as_str().trim());
-                let content = caps.get(4).map_or("", |m| m.as_str());
+                let msg_content = caps.get(4).map_or("", |m| m.as_str());
 
                 // Skip system messages
-                if is_system_message(sender, content) {
+                if is_system_message(sender, msg_content) {
                     continue;
                 }
 
                 let timestamp = parse_timestamp(date_str, time_str, format);
 
                 let msg = InternalMessage::with_metadata(
-                    sender, content, timestamp,
+                    sender,
+                    msg_content,
+                    timestamp,
                     None, // WhatsApp doesn't have message IDs in export
                     None, // No reply references in text export
                     None, // No edit timestamps
@@ -326,8 +330,8 @@ mod tests {
     #[test]
     fn test_detect_format_us() {
         let lines = vec![
-            "[1/15/24, 10:30:45 AM] Alice: Hello".to_string(),
-            "[1/15/24, 10:31:00 AM] Bob: Hi there".to_string(),
+            "[1/15/24, 10:30:45 AM] Alice: Hello",
+            "[1/15/24, 10:31:00 AM] Bob: Hi there",
         ];
         assert_eq!(detect_format(&lines), Some(DateFormat::US));
     }
@@ -335,8 +339,8 @@ mod tests {
     #[test]
     fn test_detect_format_eu_dot_bracketed() {
         let lines = vec![
-            "[15.01.24, 10:30:45] Alice: Hello".to_string(),
-            "[15.01.24, 10:31:00] Bob: Hi there".to_string(),
+            "[15.01.24, 10:30:45] Alice: Hello",
+            "[15.01.24, 10:31:00] Bob: Hi there",
         ];
         assert_eq!(detect_format(&lines), Some(DateFormat::EuDotBracketed));
     }
@@ -344,8 +348,8 @@ mod tests {
     #[test]
     fn test_detect_format_eu_dot_no_bracket() {
         let lines = vec![
-            "26.10.2025, 20:40 - Alice: Hello".to_string(),
-            "26.10.2025, 20:41 - Bob: Hi there".to_string(),
+            "26.10.2025, 20:40 - Alice: Hello",
+            "26.10.2025, 20:41 - Bob: Hi there",
         ];
         assert_eq!(detect_format(&lines), Some(DateFormat::EuDotNoBracket));
     }
@@ -353,8 +357,8 @@ mod tests {
     #[test]
     fn test_detect_format_eu_slash() {
         let lines = vec![
-            "15/01/2024, 10:30 - Alice: Hello".to_string(),
-            "15/01/2024, 10:31 - Bob: Hi there".to_string(),
+            "15/01/2024, 10:30 - Alice: Hello",
+            "15/01/2024, 10:31 - Bob: Hi there",
         ];
         assert_eq!(detect_format(&lines), Some(DateFormat::EuSlash));
     }

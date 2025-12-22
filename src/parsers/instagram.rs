@@ -63,8 +63,11 @@ impl ChatParser for InstagramParser {
 
     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
         let content = fs::read_to_string(file_path)?;
+        self.parse_str(&content)
+    }
 
-        let export: InstagramExport = serde_json::from_str(&content)
+    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+        let export: InstagramExport = serde_json::from_str(content)
             .map_err(|e| format!("Failed to parse Instagram JSON: {e}"))?;
 
         let mut messages: Vec<InternalMessage> = export
@@ -72,8 +75,8 @@ impl ChatParser for InstagramParser {
             .into_iter()
             .filter_map(|msg| {
                 // Skip messages without content (shares, reactions without text, etc.)
-                let content = msg.content?;
-                if content.is_empty() {
+                let msg_content = msg.content?;
+                if msg_content.is_empty() {
                     return None;
                 }
 
@@ -85,7 +88,7 @@ impl ChatParser for InstagramParser {
                     sender: fix_encoding(&msg.sender_name),
                     reply_to: None,
                     edited: None,
-                    content: fix_encoding(&content),
+                    content: fix_encoding(&msg_content),
                 })
             })
             .collect();

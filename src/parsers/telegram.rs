@@ -1,8 +1,7 @@
 //! Telegram JSON export parser.
 
 use std::error::Error;
-use std::fs::File;
-use std::io::BufReader;
+use std::fs;
 
 use chrono::DateTime;
 use serde::Deserialize;
@@ -76,9 +75,12 @@ impl ChatParser for TelegramParser {
     }
 
     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-        let file = File::open(file_path)?;
-        let reader = BufReader::new(file);
-        let export: TelegramExport = serde_json::from_reader(reader)?;
+        let content = fs::read_to_string(file_path)?;
+        self.parse_str(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+        let export: TelegramExport = serde_json::from_str(content)?;
 
         let messages = export
             .messages
@@ -87,9 +89,9 @@ impl ChatParser for TelegramParser {
             .filter_map(|msg| {
                 let sender = msg.from.as_ref()?;
                 let text_value = msg.text.as_ref()?;
-                let content = extract_text(text_value);
+                let msg_content = extract_text(text_value);
 
-                if content.trim().is_empty() {
+                if msg_content.trim().is_empty() {
                     return None;
                 }
 
@@ -111,7 +113,7 @@ impl ChatParser for TelegramParser {
 
                 Some(InternalMessage::with_metadata(
                     sender,
-                    content,
+                    msg_content,
                     timestamp,
                     msg.id,
                     msg.reply_to_message_id,
@@ -139,10 +141,10 @@ fn extract_text(text_value: &Value) -> String {
                 Value::Object(obj) => obj
                     .get("text")
                     .and_then(|v| v.as_str())
-                    .map(ToString::to_string), // ← исправлено
+                    .map(ToString::to_string),
                 _ => None,
             })
-            .collect::<String>(), // ← исправлено (убрали .join(""))
+            .collect::<String>(),
         _ => String::new(),
     }
 }
