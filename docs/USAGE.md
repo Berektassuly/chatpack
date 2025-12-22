@@ -8,10 +8,11 @@ Complete guide to using chatpack.
 # Basic usage
 chatpack <source> <input_file>
 
-# Sources: tg (telegram), wa (whatsapp), ig (instagram)
+# Sources: tg (telegram), wa (whatsapp), ig (instagram), dc (discord)
 chatpack tg result.json
 chatpack wa chat.txt  
 chatpack ig message_1.json
+chatpack dc chat.json
 ```
 
 ## Output Formats
@@ -190,6 +191,62 @@ chatpack tg chat.json -o /path/to/output.csv
 
 ---
 
+## Platform-Specific Examples
+
+### Telegram
+
+```bash
+# Basic export
+chatpack tg result.json
+
+# With all metadata
+chatpack tg result.json -t -r -e --ids
+
+# Filter by date range
+chatpack tg result.json --after 2024-01-01 --before 2024-12-31
+```
+
+### WhatsApp
+
+```bash
+# iOS/Android export
+chatpack wa "WhatsApp Chat with Mom.txt"
+
+# Filter specific person
+chatpack wa chat.txt --from "Alice"
+```
+
+### Instagram
+
+```bash
+# Basic export
+chatpack ig message_1.json
+
+# Multiple parts combined
+cat message_1.json message_2.json | chatpack ig /dev/stdin
+```
+
+### Discord
+
+```bash
+# JSON export (recommended, full metadata)
+chatpack dc general.json
+
+# TXT export
+chatpack dc chat.txt
+
+# CSV export  
+chatpack dc chat.csv
+
+# With timestamps and IDs
+chatpack dc chat.json -t --ids
+
+# Filter by user
+chatpack dc chat.json --from "alice"
+```
+
+---
+
 ## Examples
 
 ### Feed to ChatGPT/Claude
@@ -225,6 +282,15 @@ chatpack tg chat.json --after 2024-01-01 --before 2024-02-01 -f json -o january.
 chatpack tg chat.json -t -r -e --ids --no-merge -f jsonl -o archive.jsonl
 ```
 
+### Discord server analysis
+
+```bash
+# Export multiple channels
+chatpack dc general.json -o general.csv
+chatpack dc announcements.json -o announcements.csv
+chatpack dc off-topic.json -o off-topic.csv
+```
+
 ---
 
 ## CLI Reference
@@ -233,7 +299,7 @@ chatpack tg chat.json -t -r -e --ids --no-merge -f jsonl -o archive.jsonl
 chatpack <SOURCE> <INPUT> [OPTIONS]
 
 Arguments:
-  <SOURCE>    Chat source: tg, telegram, wa, whatsapp, ig, instagram
+  <SOURCE>    Chat source: tg, telegram, wa, whatsapp, ig, instagram, dc, discord
   <INPUT>     Input file path
 
 Options:

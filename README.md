@@ -1,6 +1,6 @@
 # 📦 chatpack
 
-> Feed your chat history to LLMs. Compress exports **13x** with CSV format.
+> Prepare chat data for RAG / LLM ingestion. Compress exports **13x** with CSV format.
 
 [![CI](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml/badge.svg)](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/berektassuly/chatpack/branch/main/graph/badge.svg)](https://codecov.io/gh/berektassuly/chatpack)
@@ -23,8 +23,9 @@ You want to ask Claude/ChatGPT about your conversations, but:
 ```
 ┌─────────────────┐     ┌──────────┐     ┌─────────────────┐
 │ Telegram JSON   │     │          │     │ Clean CSV       │
-│ WhatsApp TXT    │ ──▶│ chatpack │ ──▶│ Ready for LLM   │
+│ WhatsApp TXT    │ ──▶│ chatpack │ ──▶ │ Ready for LLM   │
 │ Instagram JSON  │     │          │     │ 13x less tokens │
+│ Discord Export  │     │          │     │                 │
 └─────────────────┘     └──────────┘     └─────────────────┘
 ```
 
@@ -61,7 +62,7 @@ chatpack wa chat.txt --from "Alice" --after 2024-01-01 -f json
 ## Features
 
 - 🚀 **Fast** — 20K+ messages/sec
-- 📱 **Multi-platform** — Telegram, WhatsApp, Instagram
+- 📱 **Multi-platform** — Telegram, WhatsApp, Instagram, Discord
 - 🔀 **Smart merge** — Consecutive messages from same sender → one entry
 - 🎯 **Filters** — By date, by sender
 - 📄 **Formats** — CSV (13x compression), JSON, JSONL (for RAG)
@@ -102,6 +103,9 @@ chatpack wa chat.txt
 
 # Instagram
 chatpack ig message_1.json
+
+# Discord
+chatpack dc chat.json
 ```
 
 **Output:** `optimized_chat.csv` — ready to paste into ChatGPT/Claude.
@@ -228,7 +232,7 @@ chatpack tg chat.json -o out.csv  # Custom output path
 
 | Guide | Description |
 |-------|-------------|
-| 📤 [Export Guide](docs/EXPORT_GUIDE.md) | How to export from Telegram, WhatsApp, Instagram |
+| 📤 [Export Guide](docs/EXPORT_GUIDE.md) | How to export from Telegram, WhatsApp, Instagram, Discord |
 | 📖 [Usage Guide](docs/USAGE.md) | All commands, flags, filters, formats |
 | 📊 [Benchmarks](docs/BENCHMARKS.md) | Performance stats and compression metrics |
 | 🧪 [Stress Testing](docs/STRESS_TEST.md) | Generate toxic data and run stress tests |
@@ -241,6 +245,7 @@ chatpack tg chat.json -o out.csv  # Custom output path
 | Telegram | JSON | IDs, timestamps, replies, edits |
 | WhatsApp | TXT | Auto-detect locale (US/EU/RU), multiline |
 | Instagram | JSON | Mojibake fix, empty message filter |
+| Discord | JSON/TXT/CSV | Via DiscordChatExporter, attachments, stickers |
 
 ## Performance
 

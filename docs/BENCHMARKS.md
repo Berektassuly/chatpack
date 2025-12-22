@@ -47,26 +47,33 @@ Consecutive messages from the same sender are merged into one entry.
 | Telegram group | 34,478 | 26,169 | 24% |
 | WhatsApp personal | 1,751 | 809 | 54% |
 | Instagram DM | 3,292 | 1,660 | 50% |
+| Discord channel | 1,232 | 583 | 53% |
 
 ### When merging helps most
 
 - **Group chats with few participants** — people send many short messages
 - **Personal chats** — rapid back-and-forth
 - **Voice message transcripts** — often split into fragments
+- **Discord announcements** — admins often send consecutive updates
 
 ---
 
 ## Processing Speed
 
-Tested on Windows 11, NVMe SSD.
+### By platform (real data)
 
-### Throughput (real data)
+| Platform | Messages | File Size | Time | Throughput |
+|----------|----------|-----------|------|------------|
+| Telegram | 34,478 | ~10 MB | 0.21s | 162K msg/s |
+| Discord TXT | 1,232 | 646 KB | 0.01s | 85K msg/s |
 
-| Format | Messages | Time | Speed |
-|--------|----------|------|-------|
-| CSV | 34,478 | 0.21s | **162K msg/s** |
-| JSON | 34,478 | 0.18s | **186K msg/s** |
-| JSONL | 34,478 | 0.26s | **131K msg/s** |
+### By output format (34K Telegram messages)
+
+| Format | Time | Speed |
+|--------|------|-------|
+| CSV | 0.21s | **162K msg/s** |
+| JSON | 0.18s | **186K msg/s** |
+| JSONL | 0.26s | **131K msg/s** |
 
 ### By operation (34K messages)
 
