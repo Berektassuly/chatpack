@@ -51,6 +51,20 @@ pub trait ChatParser: Send + Sync {
     ///
     /// Returns an error if the file cannot be read or parsed.
     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>>;
+
+    /// Parses chat content from a string.
+    ///
+    /// This is useful for WASM environments where file system access
+    /// is not available.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - The raw content of the chat export
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the content cannot be parsed.
+    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>>;
 }
 
 /// Creates a parser for the specified source.
@@ -112,7 +126,6 @@ mod tests {
 
         for source in sources {
             let parser = create_parser(source);
-            // Just verify we can call the trait method
             let _ = parser.name();
         }
     }

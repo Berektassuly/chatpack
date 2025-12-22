@@ -57,7 +57,7 @@ impl JsonlMessage {
     }
 }
 
-/// Writes messages to JSONL (JSON Lines) format.
+/// Writes messages to JSONL (JSON Lines) file.
 ///
 /// Each line is a valid JSON object:
 /// ```jsonl
@@ -87,11 +87,52 @@ pub fn write_jsonl(
     Ok(())
 }
 
+/// Converts messages to JSONL (JSON Lines) string.
+///
+/// Same format as `write_jsonl`, but returns a String instead of writing to file.
+/// Useful for WASM environments where file system access is not available.
+pub fn to_jsonl(
+    messages: &[InternalMessage],
+    config: &OutputConfig,
+) -> Result<String, Box<dyn Error>> {
+    let mut output = String::new();
+
+    for msg in messages {
+        let json_msg = JsonlMessage::from_internal(msg, config);
+        let line = serde_json::to_string(&json_msg)?;
+        output.push_str(&line);
+        output.push('\n');
+    }
+
+    Ok(output)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::{BufRead, BufReader};
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_to_jsonl_basic() {
+        let messages = vec![
+            InternalMessage::new("Alice", "Hello"),
+            InternalMessage::new("Bob", "Hi"),
+        ];
+        let config = OutputConfig::new();
+
+        let jsonl = to_jsonl(&messages, &config).unwrap();
+        let lines: Vec<&str> = jsonl.lines().collect();
+
+        assert_eq!(lines.len(), 2);
+
+        let msg1: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(msg1["sender"], "Alice");
+        assert_eq!(msg1["content"], "Hello");
+
+        let msg2: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(msg2["sender"], "Bob");
+    }
 
     #[test]
     fn test_write_jsonl_basic() {

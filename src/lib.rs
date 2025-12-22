@@ -295,8 +295,8 @@ pub mod prelude {
     // Processing
     pub use crate::core::processor::{ProcessingStats, merge_consecutive};
 
-    // Output
-    pub use crate::core::output::{write_csv, write_json, write_jsonl};
+    // Output (file writers and string converters)
+    pub use crate::core::output::{to_csv, to_json, to_jsonl, write_csv, write_json, write_jsonl};
 
     // Parsers
     pub use crate::parsers::{

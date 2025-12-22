@@ -5,7 +5,7 @@ use std::fs::File;
 
 use crate::core::models::{InternalMessage, OutputConfig};
 
-/// Writes messages to CSV with semicolon delimiter.
+/// Writes messages to CSV file with semicolon delimiter.
 ///
 /// # Format
 /// - Delimiter: `;`
@@ -36,6 +36,30 @@ pub fn write_csv(
 
     writer.flush()?;
     Ok(())
+}
+
+/// Converts messages to CSV string with semicolon delimiter.
+///
+/// Same format as `write_csv`, but returns a String instead of writing to file.
+/// Useful for WASM environments where file system access is not available.
+pub fn to_csv(
+    messages: &[InternalMessage],
+    config: &OutputConfig,
+) -> Result<String, Box<dyn Error>> {
+    let mut writer = csv::WriterBuilder::new()
+        .delimiter(b';')
+        .from_writer(Vec::new());
+
+    let header = build_header(config);
+    writer.write_record(&header)?;
+
+    for msg in messages {
+        let record = build_record(msg, config);
+        writer.write_record(&record)?;
+    }
+
+    let bytes = writer.into_inner()?;
+    Ok(String::from_utf8(bytes)?)
 }
 
 /// Build CSV header based on output configuration.
@@ -92,4 +116,26 @@ fn build_record(msg: &InternalMessage, config: &OutputConfig) -> Vec<String> {
     }
 
     record
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_csv_basic() {
+        let messages = vec![InternalMessage {
+            id: None,
+            timestamp: None,
+            sender: "Alice".to_string(),
+            content: "Hello".to_string(),
+            reply_to: None,
+            edited: None,
+        }];
+        let config = OutputConfig::default();
+
+        let csv = to_csv(&messages, &config).unwrap();
+        assert!(csv.contains("Sender;Content"));
+        assert!(csv.contains("Alice;Hello"));
+    }
 }

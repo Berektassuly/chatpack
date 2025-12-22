@@ -24,24 +24,24 @@ impl DiscordParser {
         Self
     }
 
-    /// Detect format from file extension or content
-    fn detect_format(file_path: &str, content: &str) -> DiscordFormat {
+    /// Detect format from file extension
+    fn detect_format_from_ext(file_path: &str) -> Option<DiscordFormat> {
         let path = Path::new(file_path);
-
-        // First try by extension (case-insensitive)
-        if let Some(ext) = path.extension() {
+        path.extension().and_then(|ext| {
             if ext.eq_ignore_ascii_case("json") {
-                return DiscordFormat::Json;
+                Some(DiscordFormat::Json)
+            } else if ext.eq_ignore_ascii_case("csv") {
+                Some(DiscordFormat::Csv)
+            } else if ext.eq_ignore_ascii_case("txt") {
+                Some(DiscordFormat::Txt)
+            } else {
+                None
             }
-            if ext.eq_ignore_ascii_case("csv") {
-                return DiscordFormat::Csv;
-            }
-            if ext.eq_ignore_ascii_case("txt") {
-                return DiscordFormat::Txt;
-            }
-        }
+        })
+    }
 
-        // Fallback: detect by content
+    /// Detect format from content
+    fn detect_format_from_content(content: &str) -> DiscordFormat {
         let trimmed = content.trim();
         if trimmed.starts_with('{') {
             DiscordFormat::Json
@@ -249,16 +249,31 @@ impl DiscordParser {
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_csv(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_csv_file(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
         let file = File::open(file_path)?;
-        let mut reader = csv::ReaderBuilder::new()
+        let reader = BufReader::new(file);
+        self.parse_csv_reader(reader)
+    }
+
+    #[allow(clippy::unused_self)]
+    fn parse_csv_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+        let reader = content.as_bytes();
+        self.parse_csv_reader(reader)
+    }
+
+    #[allow(clippy::unused_self)]
+    fn parse_csv_reader<R: std::io::Read>(
+        &self,
+        reader: R,
+    ) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+        let mut csv_reader = csv::ReaderBuilder::new()
             .has_headers(true)
             .flexible(true)
-            .from_reader(BufReader::new(file));
+            .from_reader(reader);
 
         let mut messages = Vec::new();
 
-        for result in reader.records() {
+        for result in csv_reader.records() {
             let record = result?;
 
             // CSV columns: AuthorID, Author, Date, Content, Attachments, Reactions
@@ -366,24 +381,33 @@ impl ChatParser for DiscordParser {
     }
 
     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-        let path = Path::new(file_path);
-
-        // For CSV, use csv crate directly (handles quoting properly)
-        if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
-        {
-            return self.parse_csv(file_path);
+        // Try to detect format from extension first
+        if let Some(format) = Self::detect_format_from_ext(file_path) {
+            return match format {
+                DiscordFormat::Csv => self.parse_csv_file(file_path),
+                DiscordFormat::Json => {
+                    let content = fs::read_to_string(file_path)?;
+                    self.parse_json(&content)
+                }
+                DiscordFormat::Txt => {
+                    let content = fs::read_to_string(file_path)?;
+                    self.parse_txt(&content)
+                }
+            };
         }
 
-        // For JSON/TXT, read file content
+        // Fallback: read content and detect from it
         let content = fs::read_to_string(file_path)?;
-        let format = Self::detect_format(file_path, &content);
+        self.parse_str(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+        let format = Self::detect_format_from_content(content);
 
         match format {
-            DiscordFormat::Json => self.parse_json(&content),
-            DiscordFormat::Txt => self.parse_txt(&content),
-            DiscordFormat::Csv => self.parse_csv(file_path),
+            DiscordFormat::Json => self.parse_json(content),
+            DiscordFormat::Txt => self.parse_txt(content),
+            DiscordFormat::Csv => self.parse_csv_str(content),
         }
     }
 }
@@ -405,38 +429,47 @@ mod tests {
     }
 
     #[test]
-    fn test_format_detection() {
+    fn test_format_detection_from_ext() {
         assert!(matches!(
-            DiscordParser::detect_format("test.json", ""),
-            DiscordFormat::Json
+            DiscordParser::detect_format_from_ext("test.json"),
+            Some(DiscordFormat::Json)
         ));
         assert!(matches!(
-            DiscordParser::detect_format("test.csv", ""),
-            DiscordFormat::Csv
+            DiscordParser::detect_format_from_ext("test.csv"),
+            Some(DiscordFormat::Csv)
         ));
         assert!(matches!(
-            DiscordParser::detect_format("test.txt", ""),
-            DiscordFormat::Txt
+            DiscordParser::detect_format_from_ext("test.txt"),
+            Some(DiscordFormat::Txt)
         ));
 
         // Case insensitive
         assert!(matches!(
-            DiscordParser::detect_format("test.JSON", ""),
-            DiscordFormat::Json
+            DiscordParser::detect_format_from_ext("test.JSON"),
+            Some(DiscordFormat::Json)
         ));
         assert!(matches!(
-            DiscordParser::detect_format("test.CSV", ""),
-            DiscordFormat::Csv
+            DiscordParser::detect_format_from_ext("test.CSV"),
+            Some(DiscordFormat::Csv)
         ));
 
-        // Content-based detection
+        // No extension
+        assert!(DiscordParser::detect_format_from_ext("test").is_none());
+    }
+
+    #[test]
+    fn test_format_detection_from_content() {
         assert!(matches!(
-            DiscordParser::detect_format("test", r#"{"messages":[]}"#),
+            DiscordParser::detect_format_from_content(r#"{"messages":[]}"#),
             DiscordFormat::Json
         ));
         assert!(matches!(
-            DiscordParser::detect_format("test", "AuthorID,Author,Date"),
+            DiscordParser::detect_format_from_content("AuthorID,Author,Date"),
             DiscordFormat::Csv
+        ));
+        assert!(matches!(
+            DiscordParser::detect_format_from_content("[1/15/2024 10:30 AM] alice"),
+            DiscordFormat::Txt
         ));
     }
 
@@ -485,5 +518,15 @@ mod tests {
 
         let ts = DiscordParser::parse_txt_timestamp("12/31/2024 11:59 PM");
         assert!(ts.is_some());
+    }
+
+    #[test]
+    fn test_parse_str_json() {
+        let parser = DiscordParser::new();
+        let json = r#"{"messages": [{"id": "1", "timestamp": "2024-01-15T10:30:00+00:00", "content": "Test", "author": {"name": "bob"}}]}"#;
+
+        let messages = parser.parse_str(json).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "bob");
     }
 }
