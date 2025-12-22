@@ -4,9 +4,6 @@ debug/
 release/
 chatpack.exe
 
-# Cargo
-Cargo.lock
-
 # IDE
 .idea/
 .vscode/
