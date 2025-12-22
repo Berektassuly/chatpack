@@ -33,7 +33,9 @@ use serde::{Deserialize, Serialize};
     chatpack telegram result.json
     chatpack tg chat.json -o optimized.csv
     chatpack wa whatsapp_chat.txt --after 2024-01-01
-    chatpack ig messages.json --format jsonl")]
+    chatpack ig messages.json --format jsonl
+    chatpack discord chat.json
+    chatpack dc chat.txt")]
 pub struct Args {
     /// Chat source type
     #[arg(value_enum)]
@@ -89,6 +91,7 @@ pub struct Args {
 /// - [`Telegram`](Source::Telegram) - JSON export from Telegram Desktop
 /// - [`WhatsApp`](Source::WhatsApp) - TXT export from `WhatsApp`
 /// - [`Instagram`](Source::Instagram) - JSON export from Instagram
+/// - [`Discord`](Source::Discord) - JSON/TXT/CSV export from DiscordChatExporter
 ///
 /// # Example
 ///
@@ -114,6 +117,11 @@ pub enum Source {
     #[value(alias = "ig")]
     #[serde(alias = "ig")]
     Instagram,
+
+    /// Discord JSON/TXT/CSV export (from DiscordChatExporter)
+    #[value(alias = "dc")]
+    #[serde(alias = "dc")]
+    Discord,
 }
 
 impl Source {
@@ -121,13 +129,22 @@ impl Source {
     pub fn default_extension(&self) -> &'static str {
         match self {
             Source::WhatsApp => "txt",
-            Source::Telegram | Source::Instagram => "json",
+            Source::Telegram | Source::Instagram | Source::Discord => "json",
         }
     }
 
     /// Returns all supported source names (including aliases).
     pub fn all_names() -> &'static [&'static str] {
-        &["telegram", "tg", "whatsapp", "wa", "instagram", "ig"]
+        &[
+            "telegram",
+            "tg",
+            "whatsapp",
+            "wa",
+            "instagram",
+            "ig",
+            "discord",
+            "dc",
+        ]
     }
 }
 
@@ -137,6 +154,7 @@ impl std::fmt::Display for Source {
             Source::Telegram => write!(f, "Telegram"),
             Source::WhatsApp => write!(f, "WhatsApp"),
             Source::Instagram => write!(f, "Instagram"),
+            Source::Discord => write!(f, "Discord"),
         }
     }
 }
@@ -149,6 +167,7 @@ impl std::str::FromStr for Source {
             "telegram" | "tg" => Ok(Source::Telegram),
             "whatsapp" | "wa" => Ok(Source::WhatsApp),
             "instagram" | "ig" => Ok(Source::Instagram),
+            "discord" | "dc" => Ok(Source::Discord),
             _ => Err(format!(
                 "Unknown source: '{}'. Expected one of: {}",
                 s,
@@ -248,6 +267,7 @@ mod tests {
         assert_eq!(Source::Telegram.to_string(), "Telegram");
         assert_eq!(Source::WhatsApp.to_string(), "WhatsApp");
         assert_eq!(Source::Instagram.to_string(), "Instagram");
+        assert_eq!(Source::Discord.to_string(), "Discord");
     }
 
     #[test]
@@ -256,6 +276,8 @@ mod tests {
         assert_eq!("tg".parse::<Source>().unwrap(), Source::Telegram);
         assert_eq!("whatsapp".parse::<Source>().unwrap(), Source::WhatsApp);
         assert_eq!("wa".parse::<Source>().unwrap(), Source::WhatsApp);
+        assert_eq!("discord".parse::<Source>().unwrap(), Source::Discord);
+        assert_eq!("dc".parse::<Source>().unwrap(), Source::Discord);
         assert!("unknown".parse::<Source>().is_err());
     }
 
@@ -287,6 +309,9 @@ mod tests {
 
         let parsed: Source = serde_json::from_str("\"wa\"").unwrap();
         assert_eq!(parsed, Source::WhatsApp);
+
+        let parsed: Source = serde_json::from_str("\"dc\"").unwrap();
+        assert_eq!(parsed, Source::Discord);
     }
 
     #[test]

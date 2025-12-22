@@ -1,190 +1,75 @@
-//! Chat export parsers for different platforms.
+//! Chat export parsers for various platforms.
 //!
-//! This module provides parsers for:
-//! - [`TelegramParser`] - Telegram JSON exports
-//! - [`WhatsAppParser`] - `WhatsApp` TXT exports (auto-detects locale)
-//! - [`InstagramParser`] - Instagram JSON exports (with Mojibake fix)
+//! This module provides parsers for chat exports from different messaging platforms.
+//! Each parser implements the [`ChatParser`] trait.
 //!
-//! # Using the Factory Function
+//! # Available Parsers
 //!
-//! The easiest way to get a parser is via [`create_parser`]:
+//! - [`TelegramParser`] - Parses Telegram JSON exports
+//! - [`WhatsAppParser`] - Parses WhatsApp TXT exports
+//! - [`InstagramParser`] - Parses Instagram JSON exports
+//! - [`DiscordParser`] - Parses Discord JSON/TXT/CSV exports
 //!
-//! ```rust,no_run
-//! use chatpack::parsers::create_parser;
-//! use chatpack::cli::Source;
-//!
-//! let parser = create_parser(Source::Telegram);
-//! let messages = parser.parse("chat.json").unwrap();
-//! ```
-//!
-//! # Using Parsers Directly
-//!
-//! For more control, instantiate parsers directly:
-//!
-//! ```rust,no_run
-//! use chatpack::parsers::{TelegramParser, ChatParser};
-//!
-//! let parser = TelegramParser::new();
-//! let messages = parser.parse("result.json").unwrap();
-//! ```
-//!
-//! # Implementing a Custom Parser
-//!
-//! To add support for a new chat source, implement [`ChatParser`]:
+//! # Example
 //!
 //! ```rust
-//! use chatpack::parsers::ChatParser;
-//! use chatpack::core::InternalMessage;
-//! use std::error::Error;
+//! use chatpack::cli::Source;
+//! use chatpack::parsers::create_parser;
 //!
-//! struct MyCustomParser;
-//!
-//! impl ChatParser for MyCustomParser {
-//!     fn name(&self) -> &'static str {
-//!         "MyChat"
-//!     }
-//!
-//!     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-//!         // Parse your format here
-//!         Ok(vec![])
-//!     }
-//! }
+//! let parser = create_parser(Source::Telegram);
+//! // let messages = parser.parse("telegram_export.json")?;
 //! ```
 
+mod discord;
 mod instagram;
 mod telegram;
 mod whatsapp;
 
+pub use discord::DiscordParser;
 pub use instagram::InstagramParser;
 pub use telegram::TelegramParser;
 pub use whatsapp::WhatsAppParser;
 
-use std::error::Error;
-
 use crate::cli::Source;
 use crate::core::InternalMessage;
+use std::error::Error;
 
-/// Trait for parsing chat exports from different messengers.
+/// Trait for parsing chat exports from different platforms.
 ///
-/// Implement this trait to add support for a new chat source.
-/// The parser should convert the source-specific format into
-/// a vector of [`InternalMessage`] structs.
-///
-/// # Example Implementation
-///
-/// ```rust
-/// use chatpack::parsers::ChatParser;
-/// use chatpack::core::InternalMessage;
-/// use std::error::Error;
-///
-/// struct DiscordParser;
-///
-/// impl ChatParser for DiscordParser {
-///     fn name(&self) -> &'static str {
-///         "Discord"
-///     }
-///
-///     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-///         let content = std::fs::read_to_string(file_path)?;
-///         // Parse Discord-specific format...
-///         Ok(vec![])
-///     }
-/// }
-/// ```
+/// Each platform-specific parser must implement this trait.
 pub trait ChatParser: Send + Sync {
-    /// Returns the human-readable name of the chat source.
-    ///
-    /// Used for logging and error messages.
+    /// Returns the name of the parser (e.g., "Telegram", "WhatsApp").
     fn name(&self) -> &'static str;
 
-    /// Parses a chat export file and returns a list of messages.
+    /// Parses a chat export file and returns a vector of internal messages.
     ///
     /// # Arguments
     ///
     /// * `file_path` - Path to the export file
     ///
-    /// # Returns
+    /// # Errors
     ///
-    /// * `Ok(Vec<InternalMessage>)` - Parsed messages in chronological order
-    /// * `Err` - If parsing fails (file not found, invalid format, etc.)
-    ///
-    /// # Notes
-    ///
-    /// - Messages should be returned in chronological order (oldest first)
-    /// - Empty or whitespace-only messages may be filtered out
-    /// - Platform-specific metadata should be preserved where available
+    /// Returns an error if the file cannot be read or parsed.
     fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>>;
 }
 
-/// Creates the appropriate parser for the given source.
-///
-/// This is the recommended way to get a parser when the source
-/// is determined at runtime (e.g., from CLI arguments).
+/// Creates a parser for the specified source.
 ///
 /// # Example
 ///
 /// ```rust
-/// use chatpack::parsers::create_parser;
 /// use chatpack::cli::Source;
+/// use chatpack::parsers::create_parser;
 ///
 /// let parser = create_parser(Source::Telegram);
-/// println!("Using {} parser", parser.name());
+/// assert_eq!(parser.name(), "Telegram");
 /// ```
-///
-/// # Adding New Sources
-///
-/// To add a new source:
-/// 1. Create `newsource.rs` implementing [`ChatParser`]
-/// 2. Add variant to [`Source`] enum in `cli.rs`
-/// 3. Add match arm here
 pub fn create_parser(source: Source) -> Box<dyn ChatParser> {
     match source {
         Source::Telegram => Box::new(TelegramParser::new()),
         Source::WhatsApp => Box::new(WhatsAppParser::new()),
         Source::Instagram => Box::new(InstagramParser::new()),
-    }
-}
-
-/// Convenience function to parse a file with auto-detected source.
-///
-/// Attempts to detect the source from file extension and content.
-/// Falls back to Telegram JSON if detection fails.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use chatpack::parsers::parse_auto;
-///
-/// // Automatically detects format
-/// let messages = parse_auto("chat.json").unwrap();
-/// ```
-pub fn parse_auto(file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-    let source = detect_source(file_path)?;
-    let parser = create_parser(source);
-    parser.parse(file_path)
-}
-
-/// Detects the chat source from file extension and content.
-fn detect_source(file_path: &str) -> Result<Source, Box<dyn Error>> {
-    let path = std::path::Path::new(file_path);
-
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("txt") => Ok(Source::WhatsApp),
-        Some("json") => {
-            // Try to detect from content
-            let content = std::fs::read_to_string(file_path)?;
-            if content.contains("\"messages\"") && content.contains("\"type\"") {
-                // Could be Telegram or Instagram
-                if content.contains("\"sender_name\"") {
-                    Ok(Source::Instagram)
-                } else {
-                    Ok(Source::Telegram)
-                }
-            } else {
-                Ok(Source::Telegram) // Default
-            }
-        }
-        _ => Ok(Source::Telegram), // Default
+        Source::Discord => Box::new(DiscordParser::new()),
     }
 }
 
@@ -211,10 +96,24 @@ mod tests {
     }
 
     #[test]
-    fn test_parser_is_send_sync() {
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<TelegramParser>();
-        assert_send_sync::<WhatsAppParser>();
-        assert_send_sync::<InstagramParser>();
+    fn test_create_parser_discord() {
+        let parser = create_parser(Source::Discord);
+        assert_eq!(parser.name(), "Discord");
+    }
+
+    #[test]
+    fn test_all_parsers_implement_trait() {
+        let sources = [
+            Source::Telegram,
+            Source::WhatsApp,
+            Source::Instagram,
+            Source::Discord,
+        ];
+
+        for source in sources {
+            let parser = create_parser(source);
+            // Just verify we can call the trait method
+            let _ = parser.name();
+        }
     }
 }

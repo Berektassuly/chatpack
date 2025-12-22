@@ -9,11 +9,13 @@ fn test_source_from_str_all_variants() {
     assert!(Source::from_str("telegram").is_ok());
     assert!(Source::from_str("whatsapp").is_ok());
     assert!(Source::from_str("instagram").is_ok());
+    assert!(Source::from_str("discord").is_ok());
 
     // Aliases
     assert!(Source::from_str("tg").is_ok());
     assert!(Source::from_str("wa").is_ok());
     assert!(Source::from_str("ig").is_ok());
+    assert!(Source::from_str("dc").is_ok());
 
     // Case variations
     assert!(Source::from_str("TELEGRAM").is_ok());
@@ -21,6 +23,8 @@ fn test_source_from_str_all_variants() {
     assert!(Source::from_str("TG").is_ok());
     assert!(Source::from_str("WA").is_ok());
     assert!(Source::from_str("IG").is_ok());
+    assert!(Source::from_str("DC").is_ok());
+    assert!(Source::from_str("DISCORD").is_ok());
 }
 
 #[test]
@@ -28,7 +32,6 @@ fn test_source_from_str_errors() {
     assert!(Source::from_str("").is_err());
     assert!(Source::from_str("unknown").is_err());
     assert!(Source::from_str("signal").is_err());
-    assert!(Source::from_str("discord").is_err());
 }
 
 #[test]
@@ -56,6 +59,7 @@ fn test_source_equality() {
     assert_eq!(Source::Telegram, Source::Telegram);
     assert_ne!(Source::Telegram, Source::WhatsApp);
     assert_ne!(Source::WhatsApp, Source::Instagram);
+    assert_ne!(Source::Instagram, Source::Discord);
 }
 
 #[test]
@@ -83,6 +87,9 @@ fn test_output_format_copy() {
 fn test_source_debug() {
     let debug = format!("{:?}", Source::Telegram);
     assert!(debug.contains("Telegram"));
+
+    let debug = format!("{:?}", Source::Discord);
+    assert!(debug.contains("Discord"));
 }
 
 #[test]
@@ -98,9 +105,10 @@ fn test_source_hash() {
     let mut set = HashSet::new();
     set.insert(Source::Telegram);
     set.insert(Source::WhatsApp);
+    set.insert(Source::Discord);
     set.insert(Source::Telegram); // duplicate
 
-    assert_eq!(set.len(), 2);
+    assert_eq!(set.len(), 3);
 }
 
 #[test]
