@@ -1,14 +1,14 @@
 [package]
 name = "chatpack"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
-description = "Compress chat exports from Telegram, WhatsApp, and Instagram into token-efficient CSV for LLMs"
+description = "Prepare chat data for RAG / LLM ingestion. Supports Telegram, WhatsApp, Instagram, Discord."
 authors = ["Mukhammedali Berektassuly <mukhammedali@berektassuly.com>"]
 license = "MIT"
 repository = "https://github.com/berektassuly/chatpack"
 homepage = "https://berektassuly.com"
 readme = "README.md"
-keywords = ["telegram", "whatsapp", "instagram", "llm", "csv"]
+keywords = ["telegram", "whatsapp", "instagram", "discord", "llm"]
 categories = ["command-line-utilities", "text-processing"]
 
 [dependencies]

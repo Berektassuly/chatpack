@@ -9,6 +9,7 @@
 //! - **Telegram** — JSON exports from Telegram Desktop
 //! - **WhatsApp** — Text exports (both iOS and Android formats)
 //! - **Instagram** — JSON exports from Instagram data download
+//! - **Discord** — JSON/TXT/CSV exports from DiscordChatExporter
 //!
 //! The library handles the complexity of different export formats and provides
 //! tools for filtering, merging, and outputting messages in formats optimized
@@ -50,6 +51,10 @@
 //! // Or use parsers directly
 //! let parser = TelegramParser;
 //! let messages = parser.parse("telegram_export.json").unwrap();
+//!
+//! // Discord supports multiple formats
+//! let parser = create_parser(Source::Discord);
+//! let messages = parser.parse("discord_chat.json").unwrap(); // or .txt, .csv
 //! ```
 //!
 //!
@@ -226,6 +231,18 @@
 //! 3. Find `messages/inbox/*/message_1.json`
 //! 4. Use with `Source::Instagram` or `InstagramParser`
 //!
+//! ### Discord
+//!
+//! Export using [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter):
+//! 1. Download and run DiscordChatExporter
+//! 2. Export chat in JSON, TXT, or CSV format
+//! 3. Use with `Source::Discord` or `DiscordParser`
+//!
+//! Supported formats:
+//! - JSON: Full metadata including attachments, stickers, replies
+//! - TXT: Human-readable format with timestamps
+//! - CSV: Spreadsheet-compatible format
+//!
 //! ## Module Structure
 //!
 //! - [`core`] — Core types and functionality
@@ -234,7 +251,7 @@
 //!   - [`core::processor`] — [`merge_consecutive`], [`ProcessingStats`]
 //!   - [`core::output`] — [`write_json`], [`write_jsonl`], [`write_csv`]
 //! - [`parsers`] — Chat parsers
-//!   - [`TelegramParser`], [`WhatsAppParser`], [`InstagramParser`]
+//!   - [`TelegramParser`], [`WhatsAppParser`], [`InstagramParser`], [`DiscordParser`]
 //!   - [`create_parser`]
 //! - [`cli`] — CLI types ([`Source`], [`OutputFormat`])
 //! - [`prelude`] — Convenient re-exports
@@ -283,7 +300,7 @@ pub mod prelude {
 
     // Parsers
     pub use crate::parsers::{
-        ChatParser, InstagramParser, TelegramParser, WhatsAppParser, create_parser,
+        ChatParser, DiscordParser, InstagramParser, TelegramParser, WhatsAppParser, create_parser,
     };
 
     // CLI types
