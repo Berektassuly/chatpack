@@ -52,15 +52,6 @@
 //! let messages = parser.parse("telegram_export.json").unwrap();
 //! ```
 //!
-//! ### Auto-Detection
-//!
-//! If you don't know the source format, use [`parse_auto`]:
-//!
-//! ```rust,no_run
-//! use chatpack::parsers::parse_auto;
-//!
-//! let messages = parse_auto("unknown_chat.json").unwrap();
-//! ```
 //!
 //! ### Message Structure
 //!
@@ -244,7 +235,7 @@
 //!   - [`core::output`] — [`write_json`], [`write_jsonl`], [`write_csv`]
 //! - [`parsers`] — Chat parsers
 //!   - [`TelegramParser`], [`WhatsAppParser`], [`InstagramParser`]
-//!   - [`create_parser`], [`parse_auto`]
+//!   - [`create_parser`]
 //! - [`cli`] — CLI types ([`Source`], [`OutputFormat`])
 //! - [`prelude`] — Convenient re-exports
 //!

@@ -139,7 +139,243 @@ fn ensure_fixtures() {
   }
 }"#;
         fs::write(format!("{dir}/instagram.json"), instagram).unwrap();
+
+        // Discord JSON
+        let discord_json = r#"{
+  "guild": {
+    "id": "123456789",
+    "name": "Test Server",
+    "iconUrl": null
+  },
+  "channel": {
+    "id": "987654321",
+    "type": "GuildTextChat",
+    "name": "general",
+    "topic": null
+  },
+  "messages": [
+    {
+      "id": "1001",
+      "type": "Default",
+      "timestamp": "2024-01-15T10:30:00+00:00",
+      "timestampEdited": null,
+      "content": "Hello Discord!",
+      "author": {
+        "id": "111",
+        "name": "alice",
+        "nickname": "Alice"
+      },
+      "attachments": [],
+      "stickers": [],
+      "embeds": []
+    },
+    {
+      "id": "1002",
+      "type": "Default",
+      "timestamp": "2024-01-15T10:31:00+00:00",
+      "timestampEdited": "2024-01-15T10:32:00+00:00",
+      "content": "Hi Alice!",
+      "author": {
+        "id": "222",
+        "name": "bob",
+        "nickname": null
+      },
+      "reference": {
+        "messageId": "1001"
+      },
+      "attachments": [
+        {"fileName": "image.png"}
+      ],
+      "stickers": [],
+      "embeds": []
+    },
+    {
+      "id": "1003",
+      "type": "Default",
+      "timestamp": "2024-01-15T10:33:00+00:00",
+      "timestampEdited": null,
+      "content": "",
+      "author": {
+        "id": "111",
+        "name": "alice",
+        "nickname": "Alice"
+      },
+      "attachments": [],
+      "stickers": [
+        {"name": "Wave"}
+      ],
+      "embeds": []
+    }
+  ],
+  "messageCount": 3
+}"#;
+        fs::write(format!("{dir}/discord.json"), discord_json).unwrap();
+
+        // Discord TXT
+        let discord_txt = r"==============================================================
+Guild: Test Server
+Channel: general
+==============================================================
+
+[1/15/2024 10:30 AM] Alice
+Hello Discord!
+
+
+[1/15/2024 10:31 AM] bob
+Hi Alice!
+
+
+{Attachments}
+https://cdn.discordapp.com/attachments/123/456/image.png
+
+
+[1/15/2024 10:33 AM] Alice
+
+
+{Stickers}
+https://cdn.discordapp.com/stickers/789.json
+
+
+==============================================================
+Exported 3 message(s)
+==============================================================";
+        fs::write(format!("{dir}/discord.txt"), discord_txt).unwrap();
+
+        // Discord CSV
+        let discord_csv = r#"AuthorID,Author,Date,Content,Attachments,Reactions
+"111","Alice","2024-01-15T10:30:00+00:00","Hello Discord!","",""
+"222","bob","2024-01-15T10:31:00+00:00","Hi Alice!","https://cdn.discordapp.com/attachments/123/456/image.png",""
+"111","Alice","2024-01-15T10:33:00+00:00","How are you?","","""#;
+        fs::write(format!("{dir}/discord.csv"), discord_csv).unwrap();
     });
+}
+
+// ============================================================================
+// Discord Parser Tests
+// ============================================================================
+
+mod discord_tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_json() {
+        ensure_fixtures();
+        let parser = create_parser(Source::Discord);
+        let messages = parser
+            .parse(&format!("{}/discord.json", fixtures_dir()))
+            .unwrap();
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[0].content, "Hello Discord!");
+        assert!(messages[0].timestamp.is_some());
+        assert_eq!(messages[0].id, Some(1001));
+    }
+
+    #[test]
+    fn test_parse_json_with_metadata() {
+        ensure_fixtures();
+        let parser = create_parser(Source::Discord);
+        let messages = parser
+            .parse(&format!("{}/discord.json", fixtures_dir()))
+            .unwrap();
+
+        // Check reply reference
+        assert_eq!(messages[1].reply_to, Some(1001));
+
+        // Check edited timestamp
+        assert!(messages[1].edited.is_some());
+
+        // Check attachment in content
+        assert!(messages[1].content.contains("[Attachment: image.png]"));
+
+        // Check sticker in content
+        assert!(messages[2].content.contains("[Sticker: Wave]"));
+    }
+
+    #[test]
+    fn test_parse_json_nickname_fallback() {
+        ensure_fixtures();
+        let parser = create_parser(Source::Discord);
+        let messages = parser
+            .parse(&format!("{}/discord.json", fixtures_dir()))
+            .unwrap();
+
+        // Alice has nickname
+        assert_eq!(messages[0].sender, "Alice");
+        // bob has no nickname, uses username
+        assert_eq!(messages[1].sender, "bob");
+    }
+
+    #[test]
+    fn test_parse_txt() {
+        ensure_fixtures();
+        let parser = create_parser(Source::Discord);
+        let messages = parser
+            .parse(&format!("{}/discord.txt", fixtures_dir()))
+            .unwrap();
+
+        assert!(!messages.is_empty());
+        assert_eq!(messages[0].sender, "Alice");
+        assert!(messages[0].content.contains("Hello Discord!"));
+    }
+
+    #[test]
+    fn test_parse_txt_attachments() {
+        ensure_fixtures();
+        let parser = create_parser(Source::Discord);
+        let messages = parser
+            .parse(&format!("{}/discord.txt", fixtures_dir()))
+            .unwrap();
+
+        let has_attachment = messages.iter().any(|m| m.content.contains("[Attachment:"));
+        assert!(has_attachment);
+    }
+
+    #[test]
+    fn test_parse_csv() {
+        ensure_fixtures();
+        let parser = create_parser(Source::Discord);
+        let messages = parser
+            .parse(&format!("{}/discord.csv", fixtures_dir()))
+            .unwrap();
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[0].content, "Hello Discord!");
+    }
+
+    #[test]
+    fn test_parse_csv_attachments() {
+        ensure_fixtures();
+        let parser = create_parser(Source::Discord);
+        let messages = parser
+            .parse(&format!("{}/discord.csv", fixtures_dir()))
+            .unwrap();
+
+        let has_attachment = messages.iter().any(|m| m.content.contains("[Attachment:"));
+        assert!(has_attachment);
+    }
+
+    #[test]
+    fn test_parser_name() {
+        let parser = create_parser(Source::Discord);
+        assert_eq!(parser.name(), "Discord");
+    }
+
+    #[test]
+    fn test_consecutive_merge() {
+        ensure_fixtures();
+        let parser = create_parser(Source::Discord);
+        let messages = parser
+            .parse(&format!("{}/discord.json", fixtures_dir()))
+            .unwrap();
+
+        let original = messages.len();
+        let merged = merge_consecutive(messages);
+
+        assert!(merged.len() <= original);
+    }
 }
 
 // ============================================================================
@@ -467,38 +703,6 @@ mod stats_tests {
 }
 
 // ============================================================================
-// parse_auto Tests
-// ============================================================================
-
-mod parse_auto_tests {
-    use super::*;
-    use chatpack::parsers::parse_auto;
-
-    #[test]
-    fn test_auto_detect_telegram() {
-        ensure_fixtures();
-        let result = parse_auto(&format!("{}/telegram_simple.json", fixtures_dir()));
-        assert!(result.is_ok());
-
-        let messages = result.unwrap();
-        assert!(!messages.is_empty());
-    }
-
-    #[test]
-    fn test_auto_detect_whatsapp() {
-        ensure_fixtures();
-        let result = parse_auto(&format!("{}/whatsapp_us.txt", fixtures_dir()));
-        assert!(result.is_ok(), "Should auto-detect WhatsApp US format");
-    }
-
-    #[test]
-    fn test_auto_nonexistent_file() {
-        let result = parse_auto("nonexistent_file.json");
-        assert!(result.is_err());
-    }
-}
-
-// ============================================================================
 // Output Config Tests
 // ============================================================================
 
@@ -632,9 +836,11 @@ mod cli_tests {
         assert_eq!(Source::from_str("tg").unwrap(), Source::Telegram);
         assert_eq!(Source::from_str("wa").unwrap(), Source::WhatsApp);
         assert_eq!(Source::from_str("ig").unwrap(), Source::Instagram);
+        assert_eq!(Source::from_str("dc").unwrap(), Source::Discord);
         assert_eq!(Source::from_str("telegram").unwrap(), Source::Telegram);
         assert_eq!(Source::from_str("whatsapp").unwrap(), Source::WhatsApp);
         assert_eq!(Source::from_str("instagram").unwrap(), Source::Instagram);
+        assert_eq!(Source::from_str("discord").unwrap(), Source::Discord);
     }
 
     #[test]
@@ -642,6 +848,7 @@ mod cli_tests {
         assert_eq!(Source::from_str("TELEGRAM").unwrap(), Source::Telegram);
         assert_eq!(Source::from_str("WhatsApp").unwrap(), Source::WhatsApp);
         assert_eq!(Source::from_str("INSTAGRAM").unwrap(), Source::Instagram);
+        assert_eq!(Source::from_str("DISCORD").unwrap(), Source::Discord);
     }
 
     #[test]
@@ -670,6 +877,7 @@ mod cli_tests {
         assert_eq!(Source::Telegram.default_extension(), "json");
         assert_eq!(Source::WhatsApp.default_extension(), "txt");
         assert_eq!(Source::Instagram.default_extension(), "json");
+        assert_eq!(Source::Discord.default_extension(), "json");
     }
 
     #[test]
@@ -692,6 +900,7 @@ mod cli_tests {
         assert!(names.contains(&"telegram"));
         assert!(names.contains(&"whatsapp"));
         assert!(names.contains(&"instagram"));
+        assert!(names.contains(&"discord"));
     }
 
     #[test]
@@ -707,6 +916,7 @@ mod cli_tests {
         assert_eq!(format!("{}", Source::Telegram), "Telegram");
         assert_eq!(format!("{}", Source::WhatsApp), "WhatsApp");
         assert_eq!(format!("{}", Source::Instagram), "Instagram");
+        assert_eq!(format!("{}", Source::Discord), "Discord");
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "chatpack"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2024"
 description = "Compress chat exports from Telegram, WhatsApp, and Instagram into token-efficient CSV for LLMs"
 authors = ["Mukhammedali Berektassuly <mukhammedali@berektassuly.com>"]
