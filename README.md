@@ -2,6 +2,8 @@
 
 > Prepare chat data for RAG / LLM ingestion. Compress exports **13x** with CSV format.
 
+🌐 **Try online:** [chatpack.berektassuly.com](https://chatpack.berektassuly.com) — no installation required!
+
 [![CI](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml/badge.svg)](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/berektassuly/chatpack/branch/main/graph/badge.svg)](https://codecov.io/gh/berektassuly/chatpack)
 [![Crates.io](https://img.shields.io/crates/v/chatpack.svg)](https://crates.io/crates/chatpack)
