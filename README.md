@@ -4,6 +4,8 @@
 
 🌐 **Try online:** [chatpack.berektassuly.com](https://chatpack.berektassuly.com) — no installation required!
 
+[![Article](https://img.shields.io/badge/Read_Article-How_I_Compressed_11M_Tokens-blueviolet?style=for-the-badge&logo=hashnode)](https://berektassuly.com/chatpack-compress-chat-exports-for-llm-rust)
+
 [![CI](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml/badge.svg)](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/berektassuly/chatpack/branch/main/graph/badge.svg)](https://codecov.io/gh/berektassuly/chatpack)
 [![Crates.io](https://img.shields.io/crates/v/chatpack.svg)](https://crates.io/crates/chatpack)
@@ -25,7 +27,7 @@ You want to ask Claude/ChatGPT about your conversations, but:
 ```
 ┌─────────────────┐     ┌──────────┐     ┌─────────────────┐
 │ Telegram JSON   │     │          │     │ Clean CSV       │
-│ WhatsApp TXT    │ ──▶│ chatpack │ ──▶ │ Ready for LLM   │
+│ WhatsApp TXT    │ ──▶│ chatpack │ ──▶│ Ready for LLM   │
 │ Instagram JSON  │     │          │     │ 13x less tokens │
 │ Discord Export  │     │          │     │                 │
 └─────────────────┘     └──────────┘     └─────────────────┘
