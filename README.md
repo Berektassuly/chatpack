@@ -27,7 +27,7 @@ You want to ask Claude/ChatGPT about your conversations, but:
 ```
 ┌─────────────────┐     ┌──────────┐     ┌─────────────────┐
 │ Telegram JSON   │     │          │     │ Clean CSV       │
-│ WhatsApp TXT    │ ──▶│ chatpack │ ──▶│ Ready for LLM   │
+│ WhatsApp TXT    │ ──▶│ chatpack │ ──▶ │ Ready for LLM   │
 │ Instagram JSON  │     │          │     │ 13x less tokens │
 │ Discord Export  │     │          │     │                 │
 └─────────────────┘     └──────────┘     └─────────────────┘
