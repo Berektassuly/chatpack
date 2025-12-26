@@ -32,15 +32,25 @@ path = "src/main.rs"
 name = "gen_test"
 path = "src/bin/gen_test.rs"
 
+# Benchmarks
+[[bench]]
+name = "parsing"
+harness = false
+
 [profile.release]
 opt-level = 3
 lto = true
 strip = true
 
+[profile.bench]
+opt-level = 3
+lto = "thin"
+
 [dev-dependencies]
 cargo-husky = { version = "1", features = ["precommit-hook", "run-cargo-clippy", "run-cargo-test"] }
 tempfile = "3.10"
 proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -134,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 6: Search (pseudocode)
     println!("\nStep 6: Search (pseudocode)");
     println!("   // let results = store.search(\"project deadline\", 5).await?;");
-    println!("   // let context = results.iter().map(|r| r.text).collect();");
+    println!("   // let context = results ().map(|r| r.text).collect();");
     println!("   // let answer = llm.ask(query, context).await?;");
 
     println!("\n=== Integration complete! ===");
