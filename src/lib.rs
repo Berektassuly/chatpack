@@ -35,213 +35,23 @@
 //! }
 //! ```
 //!
-//! ## Core Concepts
+//! ## Streaming for Large Files
 //!
-//! ### Parsing
-//!
-//! All parsers implement the [`ChatParser`] trait and return a `Vec<InternalMessage>`:
+//! For files larger than 1GB, use the streaming API to avoid memory issues:
 //!
 //! ```rust,no_run
-//! use chatpack::prelude::*;
+//! use chatpack::streaming::{StreamingParser, TelegramStreamingParser};
 //!
-//! // Using the factory function (recommended)
-//! let parser = create_parser(Source::WhatsApp);
-//! let messages = parser.parse("whatsapp_chat.txt").unwrap();
+//! let parser = TelegramStreamingParser::new();
 //!
-//! // Or use parsers directly
-//! let parser = TelegramParser;
-//! let messages = parser.parse("telegram_export.json").unwrap();
-//!
-//! // Discord supports multiple formats
-//! let parser = create_parser(Source::Discord);
-//! let messages = parser.parse("discord_chat.json").unwrap(); // or .txt, .csv
-//! ```
-//!
-//!
-//! ### Message Structure
-//!
-//! All messages are normalized to [`InternalMessage`]:
-//!
-//! ```rust
-//! use chatpack::prelude::*;
-//! use chrono::{TimeZone, Utc};
-//!
-//! let msg = InternalMessage::new("Alice", "Hello, world!")
-//!     .with_id(42)
-//!     .with_timestamp(Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap())
-//!     .with_reply_to(41);
-//!
-//! assert_eq!(msg.sender, "Alice");
-//! assert_eq!(msg.content, "Hello, world!");
-//! assert!(msg.has_metadata());
-//! ```
-//!
-//! ### Filtering
-//!
-//! Filter messages by sender or date range:
-//!
-//! ```rust,no_run
-//! use chatpack::prelude::*;
-//!
-//! let parser = create_parser(Source::Telegram);
-//! let messages = parser.parse("chat.json").unwrap();
-//!
-//! // Filter by sender
-//! let config = FilterConfig::new()
-//!     .with_user("Alice".to_string());
-//! let alice_messages = apply_filters(messages.clone(), &config);
-//!
-//! // Filter by date range
-//! let config = FilterConfig::new()
-//!     .after_date("2024-01-01").unwrap()
-//!     .before_date("2024-12-31").unwrap();
-//! let filtered = apply_filters(messages, &config);
-//! ```
-//!
-//! ### Merging Consecutive Messages
-//!
-//! Combine consecutive messages from the same sender to reduce token count:
-//!
-//! ```rust
-//! use chatpack::prelude::*;
-//!
-//! let messages = vec![
-//!     InternalMessage::new("Alice", "Hello"),
-//!     InternalMessage::new("Alice", "How are you?"),
-//!     InternalMessage::new("Bob", "Hi!"),
-//!     InternalMessage::new("Bob", "I'm good"),
-//! ];
-//!
-//! let merged = merge_consecutive(messages);
-//!
-//! assert_eq!(merged.len(), 2);
-//! assert_eq!(merged[0].content, "Hello\nHow are you?");
-//! assert_eq!(merged[1].content, "Hi!\nI'm good");
-//! ```
-//!
-//! ### Output Formats
-//!
-//! Write messages to JSON, JSONL, or CSV:
-//!
-//! ```rust,no_run
-//! use chatpack::prelude::*;
-//!
-//! let messages = vec![
-//!     InternalMessage::new("Alice", "Hello"),
-//!     InternalMessage::new("Bob", "Hi!"),
-//! ];
-//!
-//! // Minimal output (just sender and content)
-//! let config = OutputConfig::new();
-//! write_json(&messages, "minimal.json", &config).unwrap();
-//!
-//! // Full metadata
-//! let config = OutputConfig::all();
-//! write_json(&messages, "full.json", &config).unwrap();
-//!
-//! // Custom selection
-//! let config = OutputConfig::new()
-//!     .with_timestamps()
-//!     .with_ids();
-//! write_jsonl(&messages, "output.jsonl", &config).unwrap();
-//!
-//! // CSV format
-//! write_csv(&messages, "output.csv", &config).unwrap();
-//! ```
-//!
-//! ### Processing Statistics
-//!
-//! Track compression ratio and message counts:
-//!
-//! ```rust
-//! use chatpack::prelude::*;
-//!
-//! let original_count = 100;
-//! let merged_count = 45;
-//!
-//! let stats = ProcessingStats::new(original_count, merged_count);
-//!
-//! println!("Compression: {:.1}%", stats.compression_ratio());
-//! println!("Messages saved: {}", stats.messages_saved());
-//! // Output:
-//! // Compression: 55.0%
-//! // Messages saved: 55
-//! ```
-//!
-//! ## Complete Example
-//!
-//! ```rust,no_run
-//! use chatpack::prelude::*;
-//!
-//! fn process_chat(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-//!     // 1. Parse the export
-//!     let parser = create_parser(Source::Telegram);
-//!     let messages = parser.parse(input)?;
-//!     let original_count = messages.len();
-//!
-//!     // 2. Filter (optional)
-//!     let config = FilterConfig::new()
-//!         .after_date("2024-01-01")?;
-//!     let filtered = apply_filters(messages, &config);
-//!     let filtered_count = filtered.len();
-//!
-//!     // 3. Merge consecutive messages
-//!     let merged = merge_consecutive(filtered);
-//!
-//!     // 4. Output
-//!     let output_config = OutputConfig::new()
-//!         .with_timestamps();
-//!     write_json(&merged, output, &output_config)?;
-//!
-//!     // 5. Statistics
-//!     let stats = ProcessingStats::new(original_count, merged.len())
-//!         .with_filtered(filtered_count);
-//!     println!("{}", stats);
-//!
-//!     Ok(())
+//! // Process messages one at a time
+//! for result in parser.stream("huge_export.json")? {
+//!     if let Ok(msg) = result {
+//!         println!("{}: {}", msg.sender, msg.content);
+//!     }
 //! }
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
-//!
-//! ## Supported Export Formats
-//!
-//! ### Telegram
-//!
-//! Export from Telegram Desktop:
-//! 1. Open chat → ⋮ menu → Export chat history
-//! 2. Select JSON format
-//! 3. Use with `Source::Telegram` or `TelegramParser`
-//!
-//! ### WhatsApp
-//!
-//! Export from WhatsApp:
-//! 1. Open chat → ⋮ menu → More → Export chat
-//! 2. Choose "Without Media"
-//! 3. Use with `Source::WhatsApp` or `WhatsAppParser`
-//!
-//! Supported formats:
-//! - US: `1/15/24, 10:30 AM - Alice: Hello`
-//! - EU: `15.01.24, 10:30 - Alice: Hello`
-//! - Bracketed: `[15.01.24, 10:30:00] Alice: Hello`
-//!
-//! ### Instagram
-//!
-//! Export from Instagram:
-//! 1. Settings → Privacy → Download your data
-//! 2. Select JSON format
-//! 3. Find `messages/inbox/*/message_1.json`
-//! 4. Use with `Source::Instagram` or `InstagramParser`
-//!
-//! ### Discord
-//!
-//! Export using [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter):
-//! 1. Download and run DiscordChatExporter
-//! 2. Export chat in JSON, TXT, or CSV format
-//! 3. Use with `Source::Discord` or `DiscordParser`
-//!
-//! Supported formats:
-//! - JSON: Full metadata including attachments, stickers, replies
-//! - TXT: Human-readable format with timestamps
-//! - CSV: Spreadsheet-compatible format
 //!
 //! ## Module Structure
 //!
@@ -253,30 +63,15 @@
 //! - [`parsers`] — Chat parsers
 //!   - [`TelegramParser`], [`WhatsAppParser`], [`InstagramParser`], [`DiscordParser`]
 //!   - [`create_parser`]
+//! - [`streaming`] — Streaming parsers for large files
+//!   - [`TelegramStreamingParser`], [`DiscordStreamingParser`]
 //! - [`cli`] — CLI types ([`Source`], [`OutputFormat`])
 //! - [`prelude`] — Convenient re-exports
-//!
-//! ## Feature Flags
-//!
-//! This crate has no optional features. All functionality is available by default.
-//!
-//! ## Serialization
-//!
-//! All main types implement `Serialize` and `Deserialize` from serde:
-//!
-//! ```rust
-//! use chatpack::prelude::*;
-//!
-//! let msg = InternalMessage::new("Alice", "Hello");
-//! let json = serde_json::to_string(&msg).unwrap();
-//! let restored: InternalMessage = serde_json::from_str(&json).unwrap();
-//!
-//! assert_eq!(msg, restored);
-//! ```
 
 pub mod cli;
 pub mod core;
 pub mod parsers;
+pub mod streaming;
 
 /// Convenient re-exports for common usage.
 ///
