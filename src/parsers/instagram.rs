@@ -13,7 +13,7 @@ use crate::Message;
 use crate::config::InstagramConfig;
 use crate::error::ChatpackError;
 use crate::parser::{Parser, Platform};
-use crate::parsing::instagram::{InstagramExport, parse_instagram_message};
+use crate::parsing::instagram::{InstagramExport, parse_instagram_message_owned};
 
 #[cfg(feature = "streaming")]
 use crate::streaming::{InstagramStreamingParser, StreamingConfig, StreamingParser};
@@ -64,10 +64,11 @@ impl InstagramParser {
         let export: InstagramExport = serde_json::from_str(content)?;
 
         let fix = self.config.fix_encoding;
+        // Use into_iter() with owned version to avoid allocations
         let mut messages: Vec<Message> = export
             .messages
-            .iter()
-            .filter_map(|msg| parse_instagram_message(msg, fix))
+            .into_iter()
+            .filter_map(|msg| parse_instagram_message_owned(msg, fix))
             .collect();
 
         // Instagram stores messages newest-first, reverse for chronological order
