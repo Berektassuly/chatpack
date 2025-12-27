@@ -14,7 +14,6 @@
 //! This parser streams the messages array without loading the entire file.
 //! It also handles Instagram's Mojibake encoding issue (UTF-8 stored as ISO-8859-1).
 
-use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek};
 use std::path::Path;
@@ -22,7 +21,8 @@ use std::path::Path;
 use chrono::{TimeZone, Utc};
 use serde::Deserialize;
 
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
 
@@ -74,7 +74,7 @@ impl StreamingParser for InstagramStreamingParser {
         "Instagram (Streaming)"
     }
 
-    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, Box<dyn Error>> {
+    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, ChatpackError> {
         let path = Path::new(file_path);
         let file = File::open(path)?;
         let file_size = file.metadata()?.len();
@@ -210,8 +210,8 @@ impl<R: BufRead + Seek> InstagramMessageIterator<R> {
         }
     }
 
-    /// Parses a JSON string into an InternalMessage.
-    fn parse_message(json_str: &str) -> StreamingResult<Option<InternalMessage>> {
+    /// Parses a JSON string into a Message.
+    fn parse_message(json_str: &str) -> StreamingResult<Option<Message>> {
         let msg: InstagramRawMessage = serde_json::from_str(json_str)?;
 
         // Get content from various possible locations
@@ -232,7 +232,7 @@ impl<R: BufRead + Seek> InstagramMessageIterator<R> {
         // Parse timestamp (milliseconds to DateTime)
         let timestamp = Utc.timestamp_millis_opt(msg.timestamp_ms).single();
 
-        Ok(Some(InternalMessage::with_metadata(
+        Ok(Some(Message::with_metadata(
             sender, content, timestamp, None, // Instagram doesn't have message IDs in export
             None, // No reply references
             None, // No edit timestamps
@@ -272,7 +272,7 @@ impl<R: BufRead + Seek + Send> MessageIterator for InstagramMessageIterator<R> {
 }
 
 impl<R: BufRead + Seek + Send> Iterator for InstagramMessageIterator<R> {
-    type Item = StreamingResult<InternalMessage>;
+    type Item = StreamingResult<Message>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {

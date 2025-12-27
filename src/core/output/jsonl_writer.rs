@@ -6,13 +6,14 @@
 //! - Streaming processing
 //! - Large datasets that don't fit in memory
 
-use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
 use serde::Serialize;
 
-use crate::core::models::{InternalMessage, OutputConfig};
+use crate::core::models::OutputConfig;
+use crate::error::ChatpackError;
+use crate::Message;
 
 /// Minimal message structure for JSONL output.
 /// Only includes fields enabled in `OutputConfig`.
@@ -31,7 +32,7 @@ struct JsonlMessage {
 }
 
 impl JsonlMessage {
-    fn from_internal(msg: &InternalMessage, config: &OutputConfig) -> Self {
+    fn from_message(msg: &Message, config: &OutputConfig) -> Self {
         Self {
             sender: msg.sender.clone(),
             content: msg.content.clone(),
@@ -70,15 +71,15 @@ impl JsonlMessage {
 /// - ML training data
 /// - RAG document ingestion
 pub fn write_jsonl(
-    messages: &[InternalMessage],
+    messages: &[Message],
     output_path: &str,
     config: &OutputConfig,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ChatpackError> {
     let file = File::create(output_path)?;
     let mut writer = BufWriter::new(file);
 
     for msg in messages {
-        let json_msg = JsonlMessage::from_internal(msg, config);
+        let json_msg = JsonlMessage::from_message(msg, config);
         let line = serde_json::to_string(&json_msg)?;
         writeln!(writer, "{line}")?;
     }
@@ -92,13 +93,13 @@ pub fn write_jsonl(
 /// Same format as `write_jsonl`, but returns a String instead of writing to file.
 /// Useful for WASM environments where file system access is not available.
 pub fn to_jsonl(
-    messages: &[InternalMessage],
+    messages: &[Message],
     config: &OutputConfig,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, ChatpackError> {
     let mut output = String::new();
 
     for msg in messages {
-        let json_msg = JsonlMessage::from_internal(msg, config);
+        let json_msg = JsonlMessage::from_message(msg, config);
         let line = serde_json::to_string(&json_msg)?;
         output.push_str(&line);
         output.push('\n');
@@ -116,8 +117,8 @@ mod tests {
     #[test]
     fn test_to_jsonl_basic() {
         let messages = vec![
-            InternalMessage::new("Alice", "Hello"),
-            InternalMessage::new("Bob", "Hi"),
+            Message::new("Alice", "Hello"),
+            Message::new("Bob", "Hi"),
         ];
         let config = OutputConfig::new();
 
@@ -137,8 +138,8 @@ mod tests {
     #[test]
     fn test_write_jsonl_basic() {
         let messages = vec![
-            InternalMessage::new("Alice", "Hello"),
-            InternalMessage::new("Bob", "Hi"),
+            Message::new("Alice", "Hello"),
+            Message::new("Bob", "Hi"),
         ];
 
         let temp_file = NamedTempFile::new().unwrap();
@@ -173,10 +174,10 @@ mod tests {
             .unwrap();
         let edited = chrono::Utc.with_ymd_and_hms(2024, 6, 15, 13, 0, 0).unwrap();
 
-        let msg = InternalMessage::new("Alice", "Hello")
-            .timestamp(ts)
-            .id(123)
-            .edited(edited);
+        let msg = Message::new("Alice", "Hello")
+            .with_timestamp(ts)
+            .with_id(123)
+            .with_edited(edited);
 
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_str().unwrap();
@@ -197,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_jsonl_no_trailing_comma() {
-        let messages = vec![InternalMessage::new("Alice", "Hello")];
+        let messages = vec![Message::new("Alice", "Hello")];
 
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_str().unwrap();

@@ -1,8 +1,7 @@
 //! Core traits for streaming parsers.
 
-use std::error::Error;
-
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 use super::StreamingResult;
 
@@ -10,7 +9,7 @@ use super::StreamingResult;
 ///
 /// This trait is object-safe and allows for dynamic dispatch,
 /// enabling runtime selection of streaming parsers.
-pub trait MessageIterator: Iterator<Item = StreamingResult<InternalMessage>> + Send {
+pub trait MessageIterator: Iterator<Item = StreamingResult<Message>> + Send {
     /// Returns approximate progress as a percentage (0.0 - 100.0).
     ///
     /// Returns `None` if progress cannot be determined.
@@ -49,7 +48,7 @@ pub trait StreamingParser: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the file cannot be opened or has invalid format.
-    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, Box<dyn Error>>;
+    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, ChatpackError>;
 
     /// Returns the recommended buffer size for this parser.
     fn recommended_buffer_size(&self) -> usize {

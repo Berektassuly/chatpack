@@ -2,18 +2,19 @@
 //!
 //! Command-line interface for chatpack library.
 
+use std::path::Path;
 use std::process;
 use std::time::Instant;
 
-use clap::Parser;
+use clap::Parser as ClapParser;
 
-use chatpack::cli::{Args, OutputFormat};
+use chatpack::cli::Args;
 use chatpack::core::{
-    FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive, write_csv,
-    write_json, write_jsonl,
+    FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive,
 };
-use chatpack::parsers::create_parser;
-use chatpack::streaming::create_streaming_parser;
+use chatpack::format::{OutputFormat, write_to_format};
+use chatpack::parser::{create_parser, create_streaming_parser, Platform};
+use chatpack::{ChatpackError, Message};
 
 fn main() {
     if let Err(e) = run() {
@@ -22,9 +23,9 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> Result<(), ChatpackError> {
     let total_start = Instant::now();
-    let args = Args::parse();
+    let args = <Args as ClapParser>::parse();
 
     // Determine output extension based on format
     let output_path = adjust_output_extension(&args.output, args.format);
@@ -124,13 +125,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Step 5: Write output in selected format
-    println!("💾 Writing {}...", args.format);
+    let lib_format: OutputFormat = args.format.into();
+    println!("💾 Writing {}...", lib_format);
     let write_start = Instant::now();
-    match args.format {
-        OutputFormat::Csv => write_csv(&final_messages, &output_path, &output_config)?,
-        OutputFormat::Json => write_json(&final_messages, &output_path, &output_config)?,
-        OutputFormat::Jsonl => write_jsonl(&final_messages, &output_path, &output_config)?,
-    }
+    write_to_format(&final_messages, &output_path, lib_format, &output_config)?;
     let write_time = write_start.elapsed();
     println!("   Written in {:.2}s", write_time.as_secs_f64());
 
@@ -161,18 +159,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// Parse using regular (in-memory) parser
 fn parse_regular(
     args: &Args,
-) -> Result<
-    (
-        Vec<chatpack::core::InternalMessage>,
-        usize,
-        std::time::Duration,
-    ),
-    Box<dyn std::error::Error>,
-> {
-    let parser = create_parser(args.source);
+) -> Result<(Vec<Message>, usize, std::time::Duration), ChatpackError> {
+    let platform: Platform = args.source.into();
+    let parser = create_parser(platform);
     println!("⏳ Parsing {}...", parser.name());
     let parse_start = Instant::now();
-    let messages = parser.parse(&args.input)?;
+    let messages = parser.parse(Path::new(&args.input))?;
     let count = messages.len();
     Ok((messages, count, parse_start.elapsed()))
 }
@@ -180,35 +172,26 @@ fn parse_regular(
 /// Parse using streaming parser (memory-efficient)
 fn parse_streaming(
     args: &Args,
-) -> Result<
-    (
-        Vec<chatpack::core::InternalMessage>,
-        usize,
-        std::time::Duration,
-    ),
-    Box<dyn std::error::Error>,
-> {
-    let parser = create_streaming_parser(args.source)
-        .ok_or_else(|| format!("Streaming not supported for {}", args.source))?;
+) -> Result<(Vec<Message>, usize, std::time::Duration), ChatpackError> {
+    let platform: Platform = args.source.into();
+    let parser = create_streaming_parser(platform);
 
     println!("⏳ Streaming {}...", parser.name());
     let parse_start = Instant::now();
 
-    let messages: Vec<_> = parser.stream(&args.input)?.filter_map(Result::ok).collect();
+    let messages: Vec<_> = parser.stream(Path::new(&args.input))?.filter_map(Result::ok).collect();
 
     let count = messages.len();
     Ok((messages, count, parse_start.elapsed()))
 }
 
 /// Adjusts output file extension based on format if using default output.
-fn adjust_output_extension(output: &str, format: OutputFormat) -> String {
+fn adjust_output_extension(output: &str, format: chatpack::cli::OutputFormat) -> String {
     if output != "optimized_chat.csv" {
         return output.to_string();
     }
 
-    match format {
-        OutputFormat::Csv => "optimized_chat.csv".to_string(),
-        OutputFormat::Json => "optimized_chat.json".to_string(),
-        OutputFormat::Jsonl => "optimized_chat.jsonl".to_string(),
-    }
+    // Convert to library format for extension
+    let lib_format: OutputFormat = format.into();
+    format!("optimized_chat.{}", lib_format.extension())
 }

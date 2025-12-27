@@ -12,8 +12,10 @@
 //! # Example
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "telegram")]
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use chatpack::streaming::{StreamingParser, TelegramStreamingParser};
-//! use chatpack::core::InternalMessage;
+//! use chatpack::Message;
 //!
 //! let parser = TelegramStreamingParser::new();
 //!
@@ -26,11 +28,15 @@
 //! }
 //!
 //! // Or collect with error handling
-//! let messages: Vec<InternalMessage> = parser
+//! let messages: Vec<Message> = parser
 //!     .stream("large_export.json")
 //!     .unwrap()
 //!     .filter_map(Result::ok)
 //!     .collect();
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "telegram"))]
+//! # fn main() {}
 //! ```
 //!
 //! # Memory Usage
@@ -42,81 +48,119 @@
 //!
 //! # Supported Formats
 //!
-//! - Telegram JSON (via [`TelegramStreamingParser`])
-//! - Discord JSONL/JSON (via [`DiscordStreamingParser`])
-//! - Instagram JSON (via [`InstagramStreamingParser`])
-//! - WhatsApp TXT (via [`WhatsAppStreamingParser`])
+//! - Telegram JSON (via [`TelegramStreamingParser`]) - requires `telegram` feature
+//! - Discord JSONL/JSON (via [`DiscordStreamingParser`]) - requires `discord` feature
+//! - Instagram JSON (via [`InstagramStreamingParser`]) - requires `instagram` feature
+//! - WhatsApp TXT (via [`WhatsAppStreamingParser`]) - requires `whatsapp` feature
 
+#[cfg(feature = "discord")]
 mod discord;
 mod error;
+#[cfg(feature = "instagram")]
 mod instagram;
+#[cfg(feature = "telegram")]
 mod telegram;
 mod traits;
+#[cfg(feature = "whatsapp")]
 mod whatsapp;
 
+#[cfg(feature = "discord")]
 pub use discord::DiscordStreamingParser;
 pub use error::{StreamingError, StreamingResult};
+#[cfg(feature = "instagram")]
 pub use instagram::InstagramStreamingParser;
+#[cfg(feature = "telegram")]
 pub use telegram::TelegramStreamingParser;
 pub use traits::{MessageIterator, StreamingConfig, StreamingParser};
+#[cfg(feature = "whatsapp")]
 pub use whatsapp::WhatsAppStreamingParser;
 
-use crate::cli::Source;
+use crate::parser::Platform;
 
-/// Creates a streaming parser for the specified source.
+/// Creates a streaming parser for the specified platform.
 ///
-/// All sources now support streaming parsing.
+/// All platforms with the corresponding feature enabled support streaming parsing.
 ///
 /// # Example
 ///
 /// ```rust,no_run
+/// # #[cfg(feature = "telegram")]
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use chatpack::streaming::create_streaming_parser;
-/// use chatpack::cli::Source;
+/// use chatpack::parser::Platform;
 ///
-/// if let Some(parser) = create_streaming_parser(Source::Telegram) {
-///     for msg in parser.stream("large_file.json").unwrap() {
-///         // Process each message
-///     }
+/// let parser = create_streaming_parser(Platform::Telegram);
+/// for msg in parser.stream("large_file.json")? {
+///     // Process each message
 /// }
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "telegram"))]
+/// # fn main() {}
 /// ```
-pub fn create_streaming_parser(source: Source) -> Option<Box<dyn StreamingParser>> {
-    match source {
-        Source::Telegram => Some(Box::new(TelegramStreamingParser::new())),
-        Source::Discord => Some(Box::new(DiscordStreamingParser::new())),
-        Source::Instagram => Some(Box::new(InstagramStreamingParser::new())),
-        Source::WhatsApp => Some(Box::new(WhatsAppStreamingParser::new())),
+///
+/// # Panics
+///
+/// Panics if the corresponding parser feature is not enabled.
+pub fn create_streaming_parser(platform: Platform) -> Box<dyn StreamingParser> {
+    match platform {
+        #[cfg(feature = "telegram")]
+        Platform::Telegram => Box::new(TelegramStreamingParser::new()),
+        #[cfg(feature = "discord")]
+        Platform::Discord => Box::new(DiscordStreamingParser::new()),
+        #[cfg(feature = "instagram")]
+        Platform::Instagram => Box::new(InstagramStreamingParser::new()),
+        #[cfg(feature = "whatsapp")]
+        Platform::WhatsApp => Box::new(WhatsAppStreamingParser::new()),
+        // Fallback for when features are disabled
+        #[allow(unreachable_patterns)]
+        _ => panic!(
+            "Streaming parser for {:?} is not enabled. Enable the corresponding feature.",
+            platform
+        ),
     }
+}
+
+/// Creates a streaming parser for the specified source (legacy API).
+///
+/// **Deprecated:** Use [`create_streaming_parser`] with [`Platform`] instead.
+#[cfg(feature = "cli")]
+#[deprecated(since = "0.5.0", note = "Use `create_streaming_parser` with Platform instead")]
+pub fn create_streaming_parser_from_source(
+    source: crate::cli::Source,
+) -> Option<Box<dyn StreamingParser>> {
+    Some(create_streaming_parser(Platform::from(source)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(feature = "telegram")]
     #[test]
     fn test_create_streaming_parser_telegram() {
-        let parser = create_streaming_parser(Source::Telegram);
-        assert!(parser.is_some());
-        assert_eq!(parser.unwrap().name(), "Telegram (Streaming)");
+        let parser = create_streaming_parser(Platform::Telegram);
+        assert_eq!(parser.name(), "Telegram (Streaming)");
     }
 
+    #[cfg(feature = "discord")]
     #[test]
     fn test_create_streaming_parser_discord() {
-        let parser = create_streaming_parser(Source::Discord);
-        assert!(parser.is_some());
-        assert_eq!(parser.unwrap().name(), "Discord (Streaming)");
+        let parser = create_streaming_parser(Platform::Discord);
+        assert_eq!(parser.name(), "Discord (Streaming)");
     }
 
+    #[cfg(feature = "instagram")]
     #[test]
     fn test_create_streaming_parser_instagram() {
-        let parser = create_streaming_parser(Source::Instagram);
-        assert!(parser.is_some());
-        assert_eq!(parser.unwrap().name(), "Instagram (Streaming)");
+        let parser = create_streaming_parser(Platform::Instagram);
+        assert_eq!(parser.name(), "Instagram (Streaming)");
     }
 
+    #[cfg(feature = "whatsapp")]
     #[test]
     fn test_create_streaming_parser_whatsapp() {
-        let parser = create_streaming_parser(Source::WhatsApp);
-        assert!(parser.is_some());
-        assert_eq!(parser.unwrap().name(), "WhatsApp (Streaming)");
+        let parser = create_streaming_parser(Platform::WhatsApp);
+        assert_eq!(parser.name(), "WhatsApp (Streaming)");
     }
 }

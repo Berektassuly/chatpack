@@ -6,17 +6,17 @@
 
 use chatpack::prelude::*;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("=== chatpack Library Usage Examples ===\n");
 
     // Example 1: Create messages manually
     println!("1. Creating messages manually:");
     let messages = vec![
-        InternalMessage::new("Alice", "Hello!"),
-        InternalMessage::new("Alice", "How are you?"),
-        InternalMessage::new("Bob", "I'm fine, thanks!"),
-        InternalMessage::new("Bob", "And you?"),
-        InternalMessage::new("Alice", "Great!"),
+        Message::new("Alice", "Hello!"),
+        Message::new("Alice", "How are you?"),
+        Message::new("Bob", "I'm fine, thanks!"),
+        Message::new("Bob", "And you?"),
+        Message::new("Alice", "Great!"),
     ];
 
     for msg in &messages {
@@ -35,9 +35,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 3: Filter by sender
     println!("\n3. Filtering by sender (Alice only):");
     let alice_messages = vec![
-        InternalMessage::new("Alice", "Message 1"),
-        InternalMessage::new("Bob", "Message 2"),
-        InternalMessage::new("Alice", "Message 3"),
+        Message::new("Alice", "Message 1"),
+        Message::new("Bob", "Message 2"),
+        Message::new("Alice", "Message 3"),
     ];
 
     let config = FilterConfig::new().with_user("Alice".to_string());
@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 4: Using builder pattern with metadata
     println!("\n4. Creating messages with metadata:");
-    let msg = InternalMessage::new("Charlie", "Important message")
+    let msg = Message::new("Charlie", "Important message")
         .with_id(12345)
         .with_timestamp(chrono::Utc::now());
 
@@ -80,14 +80,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 7: Serialization
     println!("\n7. JSON serialization:");
-    let msg = InternalMessage::new("Dave", "Serializable message").with_id(999);
+    let msg = Message::new("Dave", "Serializable message").with_id(999);
     let json = serde_json::to_string_pretty(&msg)?;
     println!("{}", json);
 
     // Example 8: Deserialization
     println!("\n8. JSON deserialization:");
     let json_str = r#"{"sender":"Eve","content":"From JSON","id":123}"#;
-    let parsed: InternalMessage = serde_json::from_str(json_str)?;
+    let parsed: Message = serde_json::from_str(json_str)?;
     println!("   Parsed: {} said '{}'", parsed.sender, parsed.content);
 
     println!("\n=== Examples complete! ===");

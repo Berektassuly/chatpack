@@ -1,9 +1,10 @@
 //! CSV output writer.
 
-use std::error::Error;
 use std::fs::File;
 
-use crate::core::models::{InternalMessage, OutputConfig};
+use crate::core::models::OutputConfig;
+use crate::error::ChatpackError;
+use crate::Message;
 
 /// Writes messages to CSV file with semicolon delimiter.
 ///
@@ -17,10 +18,10 @@ use crate::core::models::{InternalMessage, OutputConfig};
 ///   - With edited: `Sender`, `Content`, `Edited`
 /// - Encoding: UTF-8
 pub fn write_csv(
-    messages: &[InternalMessage],
+    messages: &[Message],
     output_path: &str,
     config: &OutputConfig,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ChatpackError> {
     let file = File::create(output_path)?;
     let mut writer = csv::WriterBuilder::new().delimiter(b';').from_writer(file);
 
@@ -43,9 +44,9 @@ pub fn write_csv(
 /// Same format as `write_csv`, but returns a String instead of writing to file.
 /// Useful for WASM environments where file system access is not available.
 pub fn to_csv(
-    messages: &[InternalMessage],
+    messages: &[Message],
     config: &OutputConfig,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, ChatpackError> {
     let mut writer = csv::WriterBuilder::new()
         .delimiter(b';')
         .from_writer(Vec::new());
@@ -58,7 +59,9 @@ pub fn to_csv(
         writer.write_record(&record)?;
     }
 
-    let bytes = writer.into_inner()?;
+    let bytes = writer
+        .into_inner()
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
     Ok(String::from_utf8(bytes)?)
 }
 
@@ -87,7 +90,7 @@ fn build_header(config: &OutputConfig) -> Vec<&'static str> {
 }
 
 /// Build CSV record for a single message.
-fn build_record(msg: &InternalMessage, config: &OutputConfig) -> Vec<String> {
+fn build_record(msg: &Message, config: &OutputConfig) -> Vec<String> {
     let mut record = Vec::new();
 
     if config.include_ids {
@@ -124,14 +127,7 @@ mod tests {
 
     #[test]
     fn test_to_csv_basic() {
-        let messages = vec![InternalMessage {
-            id: None,
-            timestamp: None,
-            sender: "Alice".to_string(),
-            content: "Hello".to_string(),
-            reply_to: None,
-            edited: None,
-        }];
+        let messages = vec![Message::new("Alice", "Hello")];
         let config = OutputConfig::default();
 
         let csv = to_csv(&messages, &config).unwrap();
