@@ -20,7 +20,10 @@ pub mod discord;
 pub use telegram::{TelegramRawMessage, extract_telegram_text, parse_telegram_message};
 
 #[cfg(feature = "instagram")]
-pub use instagram::{InstagramRawMessage, fix_mojibake_encoding, parse_instagram_message};
+pub use instagram::{
+    InstagramRawMessage, fix_mojibake_encoding, parse_instagram_message,
+    parse_instagram_message_owned,
+};
 
 #[cfg(feature = "whatsapp")]
 pub use whatsapp::{
