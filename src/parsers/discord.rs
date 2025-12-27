@@ -3,7 +3,6 @@
 //! Handles exports from DiscordChatExporter tool.
 //! Supports multiple formats: JSON, TXT, CSV.
 
-use std::error::Error;
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::Path;
@@ -12,16 +11,56 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
 use serde::Deserialize;
 
+#[allow(deprecated)]
 use super::ChatParser;
-use crate::core::InternalMessage;
+use crate::config::DiscordConfig;
+use crate::error::ChatpackError;
+use crate::parser::{Parser, Platform};
+use crate::Message;
+
+#[cfg(feature = "streaming")]
+use crate::streaming::{DiscordStreamingParser, StreamingConfig, StreamingParser};
 
 /// Parser for Discord exports (from DiscordChatExporter).
 /// Supports JSON, TXT, and CSV formats.
-pub struct DiscordParser;
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use chatpack::parsers::DiscordParser;
+/// use chatpack::parser::Parser;
+///
+/// let parser = DiscordParser::new();
+/// let messages = parser.parse("discord_export.json".as_ref())?;
+/// # Ok::<(), chatpack::ChatpackError>(())
+/// ```
+pub struct DiscordParser {
+    config: DiscordConfig,
+}
 
 impl DiscordParser {
+    /// Creates a new parser with default configuration.
     pub fn new() -> Self {
-        Self
+        Self {
+            config: DiscordConfig::default(),
+        }
+    }
+
+    /// Creates a parser with custom configuration.
+    pub fn with_config(config: DiscordConfig) -> Self {
+        Self { config }
+    }
+
+    /// Creates a parser optimized for streaming large files.
+    pub fn with_streaming() -> Self {
+        Self {
+            config: DiscordConfig::streaming(),
+        }
+    }
+
+    /// Returns the current configuration.
+    pub fn config(&self) -> &DiscordConfig {
+        &self.config
     }
 
     /// Detect format from file extension
@@ -53,7 +92,7 @@ impl DiscordParser {
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_json(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_json(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let export: DiscordExport = serde_json::from_str(content)?;
 
         let messages = export
@@ -121,7 +160,7 @@ impl DiscordParser {
                     .and_then(|r| r.message_id.as_ref())
                     .and_then(|id_str| id_str.parse::<u64>().ok());
 
-                Some(InternalMessage::with_metadata(
+                Some(Message::with_metadata(
                     sender, content, timestamp, id, reply_to, edited,
                 ))
             })
@@ -131,13 +170,14 @@ impl DiscordParser {
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_txt(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_txt(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let mut messages = Vec::new();
 
         // Pattern: [M/D/YYYY H:MM AM] sender OR [M/D/YYYY H:MM:SS] sender
         let header_re = Regex::new(
             r"^\[(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)\]\s+(.+)$",
-        )?;
+        )
+        .map_err(|e| ChatpackError::invalid_format("Discord TXT", e.to_string()))?;
 
         let mut current_sender: Option<String> = None;
         let mut current_timestamp: Option<DateTime<Utc>> = None;
@@ -151,7 +191,7 @@ impl DiscordParser {
                 // Save previous message if exists
                 if let Some(sender) = current_sender.take() {
                     if !current_content.trim().is_empty() {
-                        messages.push(InternalMessage::with_metadata(
+                        messages.push(Message::with_metadata(
                             sender,
                             current_content.trim().to_string(),
                             current_timestamp,
@@ -217,7 +257,7 @@ impl DiscordParser {
         // Don't forget the last message
         if let Some(sender) = current_sender {
             if !current_content.trim().is_empty() {
-                messages.push(InternalMessage::with_metadata(
+                messages.push(Message::with_metadata(
                     sender,
                     current_content.trim().to_string(),
                     current_timestamp,
@@ -249,14 +289,14 @@ impl DiscordParser {
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_csv_file(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_csv_file(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
         let file = File::open(file_path)?;
         let reader = BufReader::new(file);
         self.parse_csv_reader(reader)
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_csv_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_csv_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let reader = content.as_bytes();
         self.parse_csv_reader(reader)
     }
@@ -265,7 +305,7 @@ impl DiscordParser {
     fn parse_csv_reader<R: std::io::Read>(
         &self,
         reader: R,
-    ) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    ) -> Result<Vec<Message>, ChatpackError> {
         let mut csv_reader = csv::ReaderBuilder::new()
             .has_headers(true)
             .flexible(true)
@@ -306,7 +346,7 @@ impl DiscordParser {
                 .ok()
                 .map(|dt| dt.to_utc());
 
-            messages.push(InternalMessage::with_metadata(
+            messages.push(Message::with_metadata(
                 sender, content, timestamp, None, None, None,
             ));
         }
@@ -375,12 +415,9 @@ struct DiscordSticker {
     name: String,
 }
 
-impl ChatParser for DiscordParser {
-    fn name(&self) -> &'static str {
-        "Discord"
-    }
-
-    fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+impl DiscordParser {
+    /// Parses content from file path (internal implementation).
+    fn parse_file_internal(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
         // Try to detect format from extension first
         if let Some(format) = Self::detect_format_from_ext(file_path) {
             return match format {
@@ -398,10 +435,11 @@ impl ChatParser for DiscordParser {
 
         // Fallback: read content and detect from it
         let content = fs::read_to_string(file_path)?;
-        self.parse_str(&content)
+        self.parse_content(&content)
     }
 
-    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    /// Parses content from a string (internal implementation).
+    fn parse_content(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let format = Self::detect_format_from_content(content);
 
         match format {
@@ -412,6 +450,75 @@ impl ChatParser for DiscordParser {
     }
 }
 
+// Implement the new unified Parser trait
+impl Parser for DiscordParser {
+    fn name(&self) -> &'static str {
+        "Discord"
+    }
+
+    fn platform(&self) -> Platform {
+        Platform::Discord
+    }
+
+    fn parse(&self, path: &Path) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_file_internal(path.to_str().unwrap_or_default())
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_content(content)
+    }
+
+    #[cfg(feature = "streaming")]
+    fn stream(
+        &self,
+        path: &Path,
+    ) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError>
+    {
+        if self.config.streaming {
+            // Use native streaming parser
+            let streaming_config = StreamingConfig::new()
+                .with_buffer_size(self.config.buffer_size)
+                .with_max_message_size(self.config.max_message_size)
+                .with_skip_invalid(self.config.skip_invalid);
+
+            let streaming_parser = DiscordStreamingParser::with_config(streaming_config);
+            let iterator = StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
+
+            Ok(Box::new(iterator.map(|result| result.map_err(ChatpackError::from))))
+        } else {
+            // Fallback: load everything into memory
+            let messages = Parser::parse(self, path)?;
+            Ok(Box::new(messages.into_iter().map(Ok)))
+        }
+    }
+
+    #[cfg(feature = "streaming")]
+    fn supports_streaming(&self) -> bool {
+        self.config.streaming
+    }
+
+    #[cfg(feature = "streaming")]
+    fn recommended_buffer_size(&self) -> usize {
+        self.config.buffer_size
+    }
+}
+
+// Keep backward compatibility with ChatParser trait
+#[allow(deprecated)]
+impl ChatParser for DiscordParser {
+    fn name(&self) -> &'static str {
+        "Discord"
+    }
+
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_file_internal(file_path)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_content(content)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,13 +526,13 @@ mod tests {
     #[test]
     fn test_parser_name() {
         let parser = DiscordParser::new();
-        assert_eq!(parser.name(), "Discord");
+        assert_eq!(Parser::name(&parser), "Discord");
     }
 
     #[test]
     fn test_parser_default() {
-        let parser = DiscordParser;
-        assert_eq!(parser.name(), "Discord");
+        let parser = DiscordParser::default();
+        assert_eq!(Parser::name(&parser), "Discord");
     }
 
     #[test]
@@ -525,7 +632,7 @@ mod tests {
         let parser = DiscordParser::new();
         let json = r#"{"messages": [{"id": "1", "timestamp": "2024-01-15T10:30:00+00:00", "content": "Test", "author": {"name": "bob"}}]}"#;
 
-        let messages = parser.parse_str(json).unwrap();
+        let messages = Parser::parse_str(&parser, json).unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].sender, "bob");
     }

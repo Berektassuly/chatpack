@@ -955,7 +955,9 @@ mod error_tests {
     fn test_filter_error_display() {
         let err = FilterConfig::new().after_date("invalid").unwrap_err();
         let display = format!("{err}");
-        assert!(display.contains("Invalid date format"));
+        // Error message format: "Invalid date 'invalid'. Expected format: YYYY-MM-DD"
+        assert!(display.contains("Invalid date"));
+        assert!(display.contains("invalid"));
     }
 }
 

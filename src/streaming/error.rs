@@ -13,7 +13,8 @@ pub enum StreamingError {
     /// IO error while reading file
     Io(io::Error),
 
-    /// JSON parsing error
+    /// JSON parsing error (only available with JSON-using parsers)
+    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord"))]
     Json(serde_json::Error),
 
     /// Invalid file format (missing expected structure)
@@ -30,6 +31,7 @@ impl fmt::Display for StreamingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             StreamingError::Io(e) => write!(f, "IO error: {e}"),
+            #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord"))]
             StreamingError::Json(e) => write!(f, "JSON error: {e}"),
             StreamingError::InvalidFormat(msg) => write!(f, "Invalid format: {msg}"),
             StreamingError::UnexpectedEof => write!(f, "Unexpected end of file"),
@@ -50,6 +52,7 @@ impl Error for StreamingError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             StreamingError::Io(e) => Some(e),
+            #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord"))]
             StreamingError::Json(e) => Some(e),
             _ => None,
         }
@@ -62,6 +65,7 @@ impl From<io::Error> for StreamingError {
     }
 }
 
+#[cfg(any(feature = "telegram", feature = "instagram", feature = "discord"))]
 impl From<serde_json::Error> for StreamingError {
     fn from(err: serde_json::Error) -> Self {
         StreamingError::Json(err)

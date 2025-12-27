@@ -9,7 +9,6 @@
 //! This parser streams line-by-line, handling multi-line messages.
 
 use std::collections::VecDeque;
-use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -17,7 +16,8 @@ use std::path::Path;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
 
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 use super::{MessageIterator, StreamingConfig, StreamingParser, StreamingResult};
 
@@ -49,7 +49,7 @@ impl StreamingParser for WhatsAppStreamingParser {
         "WhatsApp (Streaming)"
     }
 
-    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, Box<dyn Error>> {
+    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, ChatpackError> {
         let path = Path::new(file_path);
         let file = File::open(path)?;
         let file_size = file.metadata()?.len();
@@ -140,7 +140,7 @@ impl PendingMessage {
         std::mem::take(self)
     }
 
-    fn into_message(self) -> Option<InternalMessage> {
+    fn into_message(self) -> Option<Message> {
         if self.sender.is_empty() || self.content.trim().is_empty() {
             return None;
         }
@@ -149,7 +149,7 @@ impl PendingMessage {
             return None;
         }
 
-        Some(InternalMessage::with_metadata(
+        Some(Message::with_metadata(
             self.sender,
             self.content.trim().to_string(),
             self.timestamp,
@@ -239,7 +239,7 @@ pub struct WhatsAppMessageIterator<R: BufRead> {
     config: StreamingConfig,
     line_buffer: String,
     pending: PendingMessage,
-    queued: VecDeque<InternalMessage>,
+    queued: VecDeque<Message>,
     finished: bool,
     detected_format: Option<DateFormat>,
     format_regex: Option<Regex>,
@@ -378,7 +378,7 @@ impl<R: BufRead + Send> MessageIterator for WhatsAppMessageIterator<R> {
 }
 
 impl<R: BufRead + Send> Iterator for WhatsAppMessageIterator<R> {
-    type Item = StreamingResult<InternalMessage>;
+    type Item = StreamingResult<Message>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // First, drain queued messages from sample lines

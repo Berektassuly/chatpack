@@ -1,12 +1,13 @@
 //! JSON output writer.
 
-use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 
 use serde::Serialize;
 
-use crate::core::models::{InternalMessage, OutputConfig};
+use crate::core::models::OutputConfig;
+use crate::error::ChatpackError;
+use crate::Message;
 
 /// Minimal message structure for JSON output.
 /// Only includes fields enabled in `OutputConfig`.
@@ -25,7 +26,7 @@ struct JsonMessage {
 }
 
 impl JsonMessage {
-    fn from_internal(msg: &InternalMessage, config: &OutputConfig) -> Self {
+    fn from_message(msg: &Message, config: &OutputConfig) -> Self {
         Self {
             sender: msg.sender.clone(),
             content: msg.content.clone(),
@@ -61,10 +62,10 @@ impl JsonMessage {
 /// ]
 /// ```
 pub fn write_json(
-    messages: &[InternalMessage],
+    messages: &[Message],
     output_path: &str,
     config: &OutputConfig,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ChatpackError> {
     let json = to_json(messages, config)?;
     let mut file = File::create(output_path)?;
     file.write_all(json.as_bytes())?;
@@ -76,12 +77,12 @@ pub fn write_json(
 /// Same format as `write_json`, but returns a String instead of writing to file.
 /// Useful for WASM environments where file system access is not available.
 pub fn to_json(
-    messages: &[InternalMessage],
+    messages: &[Message],
     config: &OutputConfig,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, ChatpackError> {
     let json_messages: Vec<JsonMessage> = messages
         .iter()
-        .map(|m| JsonMessage::from_internal(m, config))
+        .map(|m| JsonMessage::from_message(m, config))
         .collect();
 
     Ok(serde_json::to_string_pretty(&json_messages)?)
@@ -96,8 +97,8 @@ mod tests {
     #[test]
     fn test_to_json_basic() {
         let messages = vec![
-            InternalMessage::new("Alice", "Hello"),
-            InternalMessage::new("Bob", "Hi"),
+            Message::new("Alice", "Hello"),
+            Message::new("Bob", "Hi"),
         ];
         let config = OutputConfig::new();
 
@@ -111,8 +112,8 @@ mod tests {
     #[test]
     fn test_write_json_basic() {
         let messages = vec![
-            InternalMessage::new("Alice", "Hello"),
-            InternalMessage::new("Bob", "Hi"),
+            Message::new("Alice", "Hello"),
+            Message::new("Bob", "Hi"),
         ];
 
         let temp_file = NamedTempFile::new().unwrap();
@@ -140,7 +141,9 @@ mod tests {
         let ts = chrono::Utc
             .with_ymd_and_hms(2024, 6, 15, 12, 30, 0)
             .unwrap();
-        let msg = InternalMessage::new("Alice", "Hello").timestamp(ts).id(123);
+        let msg = Message::new("Alice", "Hello")
+            .with_timestamp(ts)
+            .with_id(123);
 
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_str().unwrap();
