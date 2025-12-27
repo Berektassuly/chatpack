@@ -97,6 +97,10 @@
 //!   - [`TelegramParser`], [`WhatsAppParser`], [`InstagramParser`], [`DiscordParser`]
 //! - [`streaming`] — Streaming parsers for large files (requires `streaming` feature)
 //!   - [`TelegramStreamingParser`], [`DiscordStreamingParser`]
+//! - [`format`] — Library-first output format types (no CLI dependencies)
+//!   - [`OutputFormat`](format::OutputFormat), [`write_to_format`](format::write_to_format)
+//! - [`progress`] — Progress reporting for long-running operations
+//!   - [`Progress`](progress::Progress), [`ProgressCallback`](progress::ProgressCallback)
 //! - [`cli`] — CLI types (requires `cli` feature)
 //! - [`error`] — Unified error types ([`ChatpackError`], [`Result`])
 //! - [`prelude`] — Convenient re-exports
@@ -109,7 +113,9 @@ pub mod cli;
 pub mod config;
 pub mod core;
 pub mod error;
+pub mod format;
 pub mod message;
+pub mod progress;
 
 // Parser modules - require at least one parser feature
 #[cfg(any(
@@ -180,12 +186,20 @@ pub mod prelude {
     // Processing
     pub use crate::core::processor::{ProcessingStats, merge_consecutive};
 
+    // Output format (library-first, no CLI deps)
+    pub use crate::format::OutputFormat;
+    #[cfg(any(feature = "csv-output", feature = "json-output"))]
+    pub use crate::format::{to_format_string, write_to_format};
+
     // Output (file writers and string converters)
     #[cfg(feature = "csv-output")]
     pub use crate::core::output::{to_csv, write_csv};
 
     #[cfg(feature = "json-output")]
     pub use crate::core::output::{to_json, to_jsonl, write_json, write_jsonl};
+
+    // Progress reporting
+    pub use crate::progress::{Progress, ProgressCallback, no_progress};
 
     // Parsers (implement both Parser and legacy ChatParser traits)
     #[cfg(feature = "telegram")]
@@ -221,7 +235,7 @@ pub mod prelude {
     ))]
     pub use crate::parsers::create_parser;
 
-    // CLI types
+    // CLI types (Source only - OutputFormat is already exported from format module)
     #[cfg(feature = "cli")]
-    pub use crate::cli::{OutputFormat, Source};
+    pub use crate::cli::Source;
 }

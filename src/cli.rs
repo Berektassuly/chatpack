@@ -261,6 +261,17 @@ impl std::str::FromStr for OutputFormat {
     }
 }
 
+// Conversion to library format type
+impl From<OutputFormat> for crate::format::OutputFormat {
+    fn from(format: OutputFormat) -> crate::format::OutputFormat {
+        match format {
+            OutputFormat::Csv => crate::format::OutputFormat::Csv,
+            OutputFormat::Json => crate::format::OutputFormat::Json,
+            OutputFormat::Jsonl => crate::format::OutputFormat::Jsonl,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
