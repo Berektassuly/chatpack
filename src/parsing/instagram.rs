@@ -93,9 +93,7 @@ pub fn parse_instagram_message_owned(
     fix_encoding: bool,
 ) -> Option<Message> {
     // Get content from various possible locations (move, no clone)
-    let content = msg
-        .content
-        .or_else(|| msg.share.and_then(|s| s.share_text));
+    let content = msg.content.or_else(|| msg.share.and_then(|s| s.share_text));
 
     // Apply encoding fix if needed, but skip for ASCII (no mojibake possible)
     let content = content.map(|c| {
