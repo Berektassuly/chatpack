@@ -8,11 +8,11 @@ use std::time::Instant;
 
 use clap::Parser as ClapParser;
 
-use chatpack::cli::{Args, OutputFormat};
+use chatpack::cli::Args;
 use chatpack::core::{
-    FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive, write_csv,
-    write_json, write_jsonl,
+    FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive,
 };
+use chatpack::format::{OutputFormat, write_to_format};
 use chatpack::parser::{create_parser, create_streaming_parser, Platform};
 use chatpack::{ChatpackError, Message};
 
@@ -125,13 +125,10 @@ fn run() -> Result<(), ChatpackError> {
     }
 
     // Step 5: Write output in selected format
-    println!("💾 Writing {}...", args.format);
+    let lib_format: OutputFormat = args.format.into();
+    println!("💾 Writing {}...", lib_format);
     let write_start = Instant::now();
-    match args.format {
-        OutputFormat::Csv => write_csv(&final_messages, &output_path, &output_config)?,
-        OutputFormat::Json => write_json(&final_messages, &output_path, &output_config)?,
-        OutputFormat::Jsonl => write_jsonl(&final_messages, &output_path, &output_config)?,
-    }
+    write_to_format(&final_messages, &output_path, lib_format, &output_config)?;
     let write_time = write_start.elapsed();
     println!("   Written in {:.2}s", write_time.as_secs_f64());
 
@@ -189,14 +186,12 @@ fn parse_streaming(
 }
 
 /// Adjusts output file extension based on format if using default output.
-fn adjust_output_extension(output: &str, format: OutputFormat) -> String {
+fn adjust_output_extension(output: &str, format: chatpack::cli::OutputFormat) -> String {
     if output != "optimized_chat.csv" {
         return output.to_string();
     }
 
-    match format {
-        OutputFormat::Csv => "optimized_chat.csv".to_string(),
-        OutputFormat::Json => "optimized_chat.json".to_string(),
-        OutputFormat::Jsonl => "optimized_chat.jsonl".to_string(),
-    }
+    // Convert to library format for extension
+    let lib_format: OutputFormat = format.into();
+    format!("optimized_chat.{}", lib_format.extension())
 }
