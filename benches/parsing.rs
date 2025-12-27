@@ -9,9 +9,8 @@ use chatpack::core::output::{to_csv, to_json, to_jsonl};
 use chatpack::core::{
     FilterConfig, InternalMessage, OutputConfig, apply_filters, merge_consecutive,
 };
-use chatpack::parsers::{
-    ChatParser, DiscordParser, InstagramParser, TelegramParser, WhatsAppParser,
-};
+use chatpack::parser::Parser;
+use chatpack::parsers::{DiscordParser, InstagramParser, TelegramParser, WhatsAppParser};
 
 use chrono::{Duration, TimeZone, Utc};
 
