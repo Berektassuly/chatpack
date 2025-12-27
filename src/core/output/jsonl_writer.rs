@@ -1,8 +1,8 @@
-//! JSON Lines (JSONL) output writer.
+//! JSON Lines (JSONL/NDJSON) output writer.
 //!
-//! JSONL format is ideal for:
-//! - Machine learning pipelines
-//! - RAG (Retrieval-Augmented Generation)
+//! JSONL format outputs one JSON object per line, making it ideal for:
+//! - RAG (Retrieval-Augmented Generation) pipelines
+//! - ML training data
 //! - Streaming processing
 //! - Large datasets that don't fit in memory
 
@@ -15,8 +15,9 @@ use crate::Message;
 use crate::core::models::OutputConfig;
 use crate::error::ChatpackError;
 
-/// Minimal message structure for JSONL output.
-/// Only includes fields enabled in `OutputConfig`.
+/// Internal message representation for JSONL serialization.
+///
+/// Only includes fields enabled in [`OutputConfig`].
 #[derive(Serialize)]
 struct JsonlMessage {
     sender: String,
@@ -58,18 +59,39 @@ impl JsonlMessage {
     }
 }
 
-/// Writes messages to JSONL (JSON Lines) file.
+/// Writes messages to a JSONL (JSON Lines) file.
 ///
-/// Each line is a valid JSON object:
-/// ```jsonl
+/// Each line is a complete, valid JSON object that can be parsed independently.
+/// Also known as NDJSON (Newline Delimited JSON).
+///
+/// # Format
+///
+/// ```text
 /// {"sender":"Alice","content":"Hello"}
 /// {"sender":"Bob","content":"Hi"}
 /// ```
 ///
-/// This format is ideal for:
-/// - Streaming processing (one record at a time)
-/// - ML training data
-/// - RAG document ingestion
+/// # Examples
+///
+/// ```no_run
+/// # #[cfg(feature = "json-output")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::prelude::*;
+///
+/// let messages = vec![
+///     Message::new("Alice", "Hello!"),
+///     Message::new("Bob", "Hi there!"),
+/// ];
+/// write_jsonl(&messages, "output.jsonl", &OutputConfig::new())?;
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "json-output"))]
+/// # fn main() {}
+/// ```
+///
+/// # Errors
+///
+/// Returns [`ChatpackError::Io`] if the file cannot be created or written.
 pub fn write_jsonl(
     messages: &[Message],
     output_path: &str,
@@ -88,10 +110,33 @@ pub fn write_jsonl(
     Ok(())
 }
 
-/// Converts messages to JSONL (JSON Lines) string.
+/// Converts messages to a JSONL string.
 ///
-/// Same format as `write_jsonl`, but returns a String instead of writing to file.
-/// Useful for WASM environments where file system access is not available.
+/// Same format as [`write_jsonl`], but returns a [`String`] instead of writing
+/// to a file. Useful for WASM environments or streaming to other destinations.
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(feature = "json-output")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::prelude::*;
+///
+/// let messages = vec![
+///     Message::new("Alice", "Hello"),
+///     Message::new("Bob", "Hi"),
+/// ];
+///
+/// let jsonl = to_jsonl(&messages, &OutputConfig::new())?;
+/// let lines: Vec<&str> = jsonl.lines().collect();
+///
+/// assert_eq!(lines.len(), 2);
+/// assert!(lines[0].contains("Alice"));
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "json-output"))]
+/// # fn main() {}
+/// ```
 pub fn to_jsonl(messages: &[Message], config: &OutputConfig) -> Result<String, ChatpackError> {
     let mut output = String::new();
 

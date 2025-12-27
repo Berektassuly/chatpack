@@ -1,7 +1,6 @@
 //! Discord export parser.
 //!
-//! Handles exports from DiscordChatExporter tool.
-//! Supports multiple formats: JSON, TXT, CSV.
+//! Parses exports from the DiscordChatExporter tool in JSON, TXT, or CSV format.
 
 use std::fs::{self, File};
 use std::io::BufReader;
@@ -19,18 +18,46 @@ use crate::parser::{Parser, Platform};
 #[cfg(feature = "streaming")]
 use crate::streaming::{DiscordStreamingParser, StreamingConfig, StreamingParser};
 
-/// Parser for Discord exports (from DiscordChatExporter).
-/// Supports JSON, TXT, and CSV formats.
+/// Parser for Discord channel exports.
 ///
-/// # Example
+/// Handles exports created by [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter).
+/// Auto-detects format based on file extension.
 ///
-/// ```rust,no_run
+/// # Supported Formats
+///
+/// | Extension | Format | Notes |
+/// |-----------|--------|-------|
+/// | `.json` | JSON | Full metadata, recommended |
+/// | `.txt` | Plain text | Basic, regex-parsed |
+/// | `.csv` | CSV | Tabular format |
+///
+/// # Message Types
+///
+/// - Regular messages
+/// - Replies (preserves reference)
+/// - Attachments (as placeholders)
+/// - Stickers
+/// - Embeds (text only)
+///
+/// # Examples
+///
+/// ```no_run
 /// use chatpack::parsers::DiscordParser;
 /// use chatpack::parser::Parser;
 ///
+/// # fn main() -> chatpack::Result<()> {
 /// let parser = DiscordParser::new();
-/// let messages = parser.parse("discord_export.json".as_ref())?;
-/// # Ok::<(), chatpack::ChatpackError>(())
+///
+/// // Auto-detects format from extension
+/// let messages = parser.parse("channel.json".as_ref())?;
+///
+/// for msg in &messages {
+///     if let Some(id) = msg.id {
+///         println!("[{}] {}: {}", id, msg.sender, msg.content);
+///     }
+/// }
+/// # Ok(())
+/// # }
 /// ```
 pub struct DiscordParser {
     config: DiscordConfig,

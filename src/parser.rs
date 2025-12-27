@@ -1,47 +1,75 @@
-//! Unified parser trait for chat exports.
+//! Unified parser API for chat exports.
 //!
-//! This module provides a single entry point for parsing chat exports, with support
-//! for both in-memory and streaming modes.
+//! This module provides a platform-agnostic interface for parsing chat exports.
+//! All platform parsers implement the [`Parser`] trait, enabling consistent
+//! usage patterns across Telegram, WhatsApp, Instagram, and Discord.
 //!
-//! # Example
+//! # Overview
 //!
-//! ```rust,no_run
+//! The module provides:
+//! - [`Parser`] - Unified trait for all parsers
+//! - [`Platform`] - Enum for dynamic parser selection
+//! - [`create_parser`] - Factory function for standard parsers
+//! - [`create_streaming_parser`] - Factory function for memory-efficient streaming
+//!
+//! # Examples
+//!
+//! ## Basic Parsing
+//!
+//! ```no_run
 //! # #[cfg(feature = "telegram")]
 //! # fn main() -> chatpack::Result<()> {
-//! use chatpack::parser::{Parser, Platform};
-//! use chatpack::parsers::TelegramParser;
-//! use std::path::Path;
+//! use chatpack::parser::{Parser, Platform, create_parser};
 //!
-//! let parser = TelegramParser::new();
+//! // Create parser dynamically
+//! let parser = create_parser(Platform::Telegram);
+//! let messages = parser.parse("export.json".as_ref())?;
 //!
-//! // Parse entire file into memory
-//! let messages = parser.parse(Path::new("chat_export.json"))?;
-//!
-//! // Or stream for large files
-//! for result in parser.stream(Path::new("large_export.json"))? {
-//!     if let Ok(msg) = result {
-//!         println!("{}: {}", msg.sender, msg.content);
-//!     }
-//! }
+//! println!("Parsed {} messages", messages.len());
 //! # Ok(())
 //! # }
 //! # #[cfg(not(feature = "telegram"))]
 //! # fn main() {}
 //! ```
 //!
-//! # Platform Selection
+//! ## Parse from String
 //!
-//! Use [`Platform`] enum to dynamically select parsers:
+//! Useful for WASM or testing:
 //!
-//! ```rust
-//! # #[cfg(feature = "telegram")]
-//! # fn main() {
-//! use chatpack::parser::{Platform, create_parser};
+//! ```
+//! # #[cfg(feature = "whatsapp")]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::parser::{Parser, create_parser, Platform};
 //!
-//! let parser = create_parser(Platform::Telegram);
-//! // parser.parse("file.json")?;
+//! let content = "[1/15/24, 10:30:45 AM] Alice: Hello!";
+//! let parser = create_parser(Platform::WhatsApp);
+//! let messages = parser.parse_str(content)?;
+//!
+//! assert_eq!(messages[0].sender, "Alice");
+//! # Ok(())
 //! # }
-//! # #[cfg(not(feature = "telegram"))]
+//! # #[cfg(not(feature = "whatsapp"))]
+//! # fn main() {}
+//! ```
+//!
+//! ## Streaming Large Files
+//!
+//! Process files that don't fit in memory:
+//!
+//! ```no_run
+//! # #[cfg(all(feature = "telegram", feature = "streaming"))]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::parser::{Parser, Platform, create_streaming_parser};
+//!
+//! let parser = create_streaming_parser(Platform::Telegram);
+//!
+//! for result in parser.stream("10gb_export.json".as_ref())? {
+//!     let msg = result?;
+//!     // Process one message at a time
+//! }
+//! # Ok(())
+//! # }
+//! # #[cfg(not(all(feature = "telegram", feature = "streaming")))]
 //! # fn main() {}
 //! ```
 
@@ -55,47 +83,98 @@ use crate::error::ChatpackError;
 #[cfg(feature = "streaming")]
 use crate::streaming::MessageIterator;
 
-/// Supported messaging platforms.
+/// Supported messaging platforms for chat export parsing.
 ///
-/// This enum identifies the source platform for chat exports, enabling
-/// dynamic parser selection without CLI dependencies.
+/// Each variant corresponds to a specific export format and parser implementation.
+/// Use with [`create_parser`] or [`create_streaming_parser`] for dynamic parser selection.
 ///
-/// # Example
+/// # Aliases
 ///
-/// ```rust
+/// All platforms support short aliases for convenience:
+/// - `telegram` / `tg`
+/// - `whatsapp` / `wa`
+/// - `instagram` / `ig`
+/// - `discord` / `dc`
+///
+/// # Examples
+///
+/// ```
 /// use chatpack::parser::Platform;
 /// use std::str::FromStr;
 ///
-/// let platform = Platform::from_str("telegram").unwrap();
+/// // Parse from string (case-insensitive)
+/// let platform = Platform::from_str("telegram")?;
 /// assert_eq!(platform, Platform::Telegram);
 ///
-/// // Aliases are supported
-/// let platform = Platform::from_str("tg").unwrap();
+/// // Aliases work too
+/// let platform = Platform::from_str("tg")?;
 /// assert_eq!(platform, Platform::Telegram);
+///
+/// // Get file extension
+/// assert_eq!(Platform::WhatsApp.default_extension(), "txt");
+/// assert_eq!(Platform::Telegram.default_extension(), "json");
+/// # Ok::<(), String>(())
+/// ```
+///
+/// # Serialization
+///
+/// Serializes to lowercase strings, deserializes with alias support:
+///
+/// ```
+/// use chatpack::parser::Platform;
+///
+/// let json = serde_json::to_string(&Platform::Telegram)?;
+/// assert_eq!(json, "\"telegram\"");
+///
+/// // Deserialize with alias
+/// let platform: Platform = serde_json::from_str("\"tg\"")?;
+/// assert_eq!(platform, Platform::Telegram);
+/// # Ok::<(), serde_json::Error>(())
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[non_exhaustive]
 pub enum Platform {
-    /// Telegram JSON exports from Telegram Desktop
+    /// Telegram Desktop JSON exports.
+    ///
+    /// Parses the `result.json` file from "Export chat history" feature.
+    /// Handles service messages, forwarded messages, and reply chains.
     #[serde(alias = "tg")]
     Telegram,
 
-    /// WhatsApp TXT exports (iOS and Android)
+    /// WhatsApp TXT exports from iOS and Android.
+    ///
+    /// Auto-detects locale-specific date formats (US, EU, RU variants).
+    /// Handles multiline messages and system notifications.
     #[serde(alias = "wa")]
     WhatsApp,
 
-    /// Instagram JSON exports from data download
+    /// Instagram JSON exports from Meta's data download.
+    ///
+    /// Automatically fixes Mojibake encoding issues in non-ASCII text.
+    /// Parses direct messages from the `messages/` directory.
     #[serde(alias = "ig")]
     Instagram,
 
-    /// Discord exports from DiscordChatExporter (JSON/TXT/CSV)
+    /// Discord exports from DiscordChatExporter tool.
+    ///
+    /// Supports multiple formats: JSON, TXT, and CSV.
+    /// Preserves attachments, stickers, and reply references.
     #[serde(alias = "dc")]
     Discord,
 }
 
 impl Platform {
     /// Returns the default file extension for exports from this platform.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chatpack::parser::Platform;
+    ///
+    /// assert_eq!(Platform::Telegram.default_extension(), "json");
+    /// assert_eq!(Platform::WhatsApp.default_extension(), "txt");
+    /// ```
     pub fn default_extension(&self) -> &'static str {
         match self {
             Platform::WhatsApp => "txt",
@@ -103,7 +182,19 @@ impl Platform {
         }
     }
 
-    /// Returns all platform names including aliases.
+    /// Returns all valid platform names and aliases.
+    ///
+    /// Useful for CLI help text or validation messages.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chatpack::parser::Platform;
+    ///
+    /// let names = Platform::all_names();
+    /// assert!(names.contains(&"telegram"));
+    /// assert!(names.contains(&"tg")); // alias
+    /// ```
     pub fn all_names() -> &'static [&'static str] {
         &[
             "telegram",
@@ -117,7 +208,17 @@ impl Platform {
         ]
     }
 
-    /// Returns all available platforms.
+    /// Returns all available platform variants.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chatpack::parser::Platform;
+    ///
+    /// for platform in Platform::all() {
+    ///     println!("{}: .{}", platform, platform.default_extension());
+    /// }
+    /// ```
     pub fn all() -> &'static [Platform] {
         &[
             Platform::Telegram,
@@ -157,7 +258,33 @@ impl std::str::FromStr for Platform {
     }
 }
 
-/// Iterator adapter that wraps StreamingError into ChatpackError.
+/// Iterator over parsed messages with progress tracking.
+///
+/// Wraps a streaming parser's [`MessageIterator`](crate::streaming::MessageIterator)
+/// and converts errors to [`ChatpackError`]. Provides progress information for
+/// long-running operations.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[cfg(all(feature = "telegram", feature = "streaming"))]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::parser::{Parser, Platform, create_streaming_parser};
+///
+/// let parser = create_streaming_parser(Platform::Telegram);
+/// let mut count = 0;
+///
+/// for result in parser.stream("export.json".as_ref())? {
+///     let msg = result?;
+///     count += 1;
+/// }
+///
+/// println!("Processed {} messages", count);
+/// # Ok(())
+/// # }
+/// # #[cfg(not(all(feature = "telegram", feature = "streaming")))]
+/// # fn main() {}
+/// ```
 #[cfg(feature = "streaming")]
 pub struct ParseIterator {
     inner: Box<dyn MessageIterator>,
@@ -170,7 +297,9 @@ impl ParseIterator {
         Self { inner }
     }
 
-    /// Returns the progress as a percentage (0.0 - 100.0).
+    /// Returns the progress as a percentage (0.0 to 100.0).
+    ///
+    /// Returns `None` if progress cannot be determined (e.g., unknown file size).
     pub fn progress(&self) -> Option<f64> {
         self.inner.progress()
     }
@@ -197,40 +326,65 @@ impl Iterator for ParseIterator {
     }
 }
 
-/// Unified trait for parsing chat exports.
+/// Unified trait for parsing chat exports from any platform.
 ///
-/// This trait combines the functionality of the previous `ChatParser` and
-/// `StreamingParser` traits into a single, cohesive API.
+/// All platform-specific parsers implement this trait, providing a consistent
+/// interface for parsing chat exports regardless of the source platform.
 ///
-/// # Implementation Notes
+/// # Required Methods
 ///
-/// Parsers must implement:
-/// - [`name`](Parser::name) - Parser identifier
-/// - [`platform`](Parser::platform) - Platform this parser handles
-/// - [`parse`](Parser::parse) - Load entire file into memory
-/// - [`parse_str`](Parser::parse_str) - Parse from a string
+/// | Method | Description |
+/// |--------|-------------|
+/// | [`name`](Parser::name) | Human-readable parser name |
+/// | [`platform`](Parser::platform) | Platform enum variant |
+/// | [`parse`](Parser::parse) | Parse file into memory |
+/// | [`parse_str`](Parser::parse_str) | Parse from string |
 ///
-/// Optionally override:
-/// - [`stream`](Parser::stream) - Streaming for large files (default: falls back to parse)
-/// - [`supports_streaming`](Parser::supports_streaming) - Whether native streaming is supported
+/// # Optional Methods
 ///
-/// # Example Implementation
+/// | Method | Default | Description |
+/// |--------|---------|-------------|
+/// | [`stream`](Parser::stream) | Falls back to `parse` | Memory-efficient streaming |
+/// | [`supports_streaming`](Parser::supports_streaming) | `false` | Native streaming support |
+/// | [`recommended_buffer_size`](Parser::recommended_buffer_size) | 64KB | Buffer size hint |
 ///
-/// ```rust,ignore
-/// impl Parser for MyParser {
-///     fn name(&self) -> &'static str { "MyParser" }
-///     fn platform(&self) -> Platform { Platform::Telegram }
+/// # Examples
 ///
-///     fn parse(&self, path: &Path) -> Result<Vec<Message>, ChatpackError> {
-///         let content = std::fs::read_to_string(path)?;
-///         self.parse_str(&content)
-///     }
+/// Using a parser directly:
 ///
-///     fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
-///         // Parse logic here
-///         Ok(vec![])
-///     }
-/// }
+/// ```no_run
+/// # #[cfg(feature = "telegram")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::parser::Parser;
+/// use chatpack::parsers::TelegramParser;
+///
+/// let parser = TelegramParser::new();
+///
+/// // Parse from file
+/// let messages = parser.parse("export.json".as_ref())?;
+///
+/// // Parse from string
+/// let json = r#"{"messages": []}"#;
+/// let messages = parser.parse_str(json)?;
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "telegram"))]
+/// # fn main() {}
+/// ```
+///
+/// Using the factory function:
+///
+/// ```no_run
+/// # #[cfg(feature = "telegram")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::parser::{Parser, Platform, create_parser};
+///
+/// let parser = create_parser(Platform::Telegram);
+/// let messages = parser.parse("export.json".as_ref())?;
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "telegram"))]
+/// # fn main() {}
 /// ```
 pub trait Parser: Send + Sync {
     /// Returns the human-readable name of this parser.
@@ -362,19 +516,24 @@ pub trait Parser: Send + Sync {
     }
 }
 
-/// Creates a parser for the specified platform.
+/// Creates a parser for the specified platform with default configuration.
 ///
-/// This is the main entry point for dynamic parser creation.
+/// This is the primary factory function for creating parsers dynamically.
+/// The returned parser loads the entire file into memory, which is suitable
+/// for files up to ~500MB.
 ///
-/// # Example
+/// For larger files, use [`create_streaming_parser`] instead.
 ///
-/// ```rust
+/// # Examples
+///
+/// ```
 /// # #[cfg(feature = "telegram")]
 /// # fn main() {
 /// use chatpack::parser::{Platform, create_parser};
 ///
 /// let parser = create_parser(Platform::Telegram);
 /// assert_eq!(parser.name(), "Telegram");
+/// assert_eq!(parser.platform(), Platform::Telegram);
 /// # }
 /// # #[cfg(not(feature = "telegram"))]
 /// # fn main() {}
@@ -382,7 +541,12 @@ pub trait Parser: Send + Sync {
 ///
 /// # Panics
 ///
-/// Panics if the corresponding parser feature is not enabled.
+/// Panics if the corresponding feature is not enabled. Enable features in `Cargo.toml`:
+///
+/// ```toml
+/// [dependencies]
+/// chatpack = { version = "0.5", features = ["telegram"] }
+/// ```
 pub fn create_parser(platform: Platform) -> Box<dyn Parser> {
     match platform {
         #[cfg(feature = "telegram")]
@@ -402,31 +566,47 @@ pub fn create_parser(platform: Platform) -> Box<dyn Parser> {
     }
 }
 
-/// Creates a parser for the specified platform with streaming support.
+/// Creates a parser optimized for streaming large files.
 ///
-/// This creates a parser configured for optimal streaming performance.
-/// All platforms now support streaming.
+/// The returned parser is configured for memory-efficient processing of files
+/// that may be larger than available RAM. Use the [`stream`](Parser::stream)
+/// method to process messages one at a time.
 ///
-/// # Example
+/// # When to Use
 ///
-/// ```rust,no_run
-/// # #[cfg(feature = "telegram")]
+/// - Files larger than 500MB
+/// - Memory-constrained environments
+/// - When you need progress tracking
+///
+/// For smaller files, [`create_parser`] is simpler and often faster.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[cfg(all(feature = "telegram", feature = "streaming"))]
 /// # fn main() -> chatpack::Result<()> {
-/// use chatpack::parser::{Platform, create_streaming_parser};
+/// use chatpack::parser::{Parser, Platform, create_streaming_parser};
 ///
 /// let parser = create_streaming_parser(Platform::Telegram);
-/// for result in parser.stream("large_file.json".as_ref())? {
-///     // Process each message
+/// assert!(parser.supports_streaming());
+///
+/// let mut count = 0;
+/// for result in parser.stream("10gb_export.json".as_ref())? {
+///     let _msg = result?;
+///     count += 1;
+///     if count % 100_000 == 0 {
+///         println!("Processed {} messages", count);
+///     }
 /// }
 /// # Ok(())
 /// # }
-/// # #[cfg(not(feature = "telegram"))]
+/// # #[cfg(not(all(feature = "telegram", feature = "streaming")))]
 /// # fn main() {}
 /// ```
 ///
 /// # Panics
 ///
-/// Panics if the corresponding parser feature is not enabled.
+/// Panics if the corresponding feature is not enabled.
 pub fn create_streaming_parser(platform: Platform) -> Box<dyn Parser> {
     match platform {
         #[cfg(feature = "telegram")]
