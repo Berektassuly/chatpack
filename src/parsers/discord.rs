@@ -16,8 +16,10 @@ use super::ChatParser;
 use crate::config::DiscordConfig;
 use crate::error::ChatpackError;
 use crate::parser::{Parser, Platform};
-use crate::streaming::{DiscordStreamingParser, StreamingConfig, StreamingParser};
 use crate::Message;
+
+#[cfg(feature = "streaming")]
+use crate::streaming::{DiscordStreamingParser, StreamingConfig, StreamingParser};
 
 /// Parser for Discord exports (from DiscordChatExporter).
 /// Supports JSON, TXT, and CSV formats.
@@ -466,6 +468,7 @@ impl Parser for DiscordParser {
         self.parse_content(content)
     }
 
+    #[cfg(feature = "streaming")]
     fn stream(
         &self,
         path: &Path,
@@ -489,10 +492,12 @@ impl Parser for DiscordParser {
         }
     }
 
+    #[cfg(feature = "streaming")]
     fn supports_streaming(&self) -> bool {
         self.config.streaming
     }
 
+    #[cfg(feature = "streaming")]
     fn recommended_buffer_size(&self) -> usize {
         self.config.buffer_size
     }

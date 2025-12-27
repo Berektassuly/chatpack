@@ -6,6 +6,8 @@
 //! # Example
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "telegram")]
+//! # fn main() -> chatpack::Result<()> {
 //! use chatpack::parser::{Parser, Platform};
 //! use chatpack::parsers::TelegramParser;
 //! use std::path::Path;
@@ -21,7 +23,10 @@
 //!         println!("{}: {}", msg.sender, msg.content);
 //!     }
 //! }
-//! # Ok::<(), chatpack::ChatpackError>(())
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "telegram"))]
+//! # fn main() {}
 //! ```
 //!
 //! # Platform Selection
@@ -29,10 +34,15 @@
 //! Use [`Platform`] enum to dynamically select parsers:
 //!
 //! ```rust
+//! # #[cfg(feature = "telegram")]
+//! # fn main() {
 //! use chatpack::parser::{Platform, create_parser};
 //!
 //! let parser = create_parser(Platform::Telegram);
 //! // parser.parse("file.json")?;
+//! # }
+//! # #[cfg(not(feature = "telegram"))]
+//! # fn main() {}
 //! ```
 
 use std::path::Path;
@@ -40,8 +50,10 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::error::ChatpackError;
-use crate::streaming::MessageIterator;
 use crate::Message;
+
+#[cfg(feature = "streaming")]
+use crate::streaming::MessageIterator;
 
 /// Supported messaging platforms.
 ///
@@ -138,7 +150,8 @@ impl std::str::FromStr for Platform {
     }
 }
 
-// Conversion from CLI Source to Platform
+// Conversion from CLI Source to Platform (only with cli feature)
+#[cfg(feature = "cli")]
 impl From<crate::cli::Source> for Platform {
     fn from(source: crate::cli::Source) -> Self {
         match source {
@@ -151,10 +164,12 @@ impl From<crate::cli::Source> for Platform {
 }
 
 /// Iterator adapter that wraps StreamingError into ChatpackError.
+#[cfg(feature = "streaming")]
 pub struct ParseIterator {
     inner: Box<dyn MessageIterator>,
 }
 
+#[cfg(feature = "streaming")]
 impl ParseIterator {
     /// Creates a new parse iterator from a message iterator.
     pub fn new(inner: Box<dyn MessageIterator>) -> Self {
@@ -177,6 +192,7 @@ impl ParseIterator {
     }
 }
 
+#[cfg(feature = "streaming")]
 impl Iterator for ParseIterator {
     type Item = Result<Message, ChatpackError>;
 
@@ -226,11 +242,16 @@ pub trait Parser: Send + Sync {
     /// # Example
     ///
     /// ```rust
+    /// # #[cfg(feature = "telegram")]
+    /// # fn main() {
     /// use chatpack::parser::Parser;
     /// use chatpack::parsers::TelegramParser;
     ///
     /// let parser = TelegramParser::new();
     /// assert_eq!(parser.name(), "Telegram");
+    /// # }
+    /// # #[cfg(not(feature = "telegram"))]
+    /// # fn main() {}
     /// ```
     fn name(&self) -> &'static str;
 
@@ -293,6 +314,8 @@ pub trait Parser: Send + Sync {
     /// # Example
     ///
     /// ```rust,no_run
+    /// # #[cfg(feature = "telegram")]
+    /// # fn main() -> chatpack::Result<()> {
     /// use chatpack::parser::Parser;
     /// use chatpack::parsers::TelegramParser;
     /// use std::path::Path;
@@ -303,7 +326,10 @@ pub trait Parser: Send + Sync {
     ///         println!("{}: {}", msg.sender, msg.content);
     ///     }
     /// }
-    /// # Ok::<(), chatpack::ChatpackError>(())
+    /// # Ok(())
+    /// # }
+    /// # #[cfg(not(feature = "telegram"))]
+    /// # fn main() {}
     /// ```
     fn stream(&self, path: &Path) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError> {
         // Default implementation: load everything into memory
@@ -339,19 +365,36 @@ pub trait Parser: Send + Sync {
 /// # Example
 ///
 /// ```rust
+/// # #[cfg(feature = "telegram")]
+/// # fn main() {
 /// use chatpack::parser::{Platform, create_parser};
 ///
 /// let parser = create_parser(Platform::Telegram);
 /// assert_eq!(parser.name(), "Telegram");
+/// # }
+/// # #[cfg(not(feature = "telegram"))]
+/// # fn main() {}
 /// ```
+///
+/// # Panics
+///
+/// Panics if the corresponding parser feature is not enabled.
 pub fn create_parser(platform: Platform) -> Box<dyn Parser> {
-    use crate::parsers::{DiscordParser, InstagramParser, TelegramParser, WhatsAppParser};
-
     match platform {
-        Platform::Telegram => Box::new(TelegramParser::new()),
-        Platform::WhatsApp => Box::new(WhatsAppParser::new()),
-        Platform::Instagram => Box::new(InstagramParser::new()),
-        Platform::Discord => Box::new(DiscordParser::new()),
+        #[cfg(feature = "telegram")]
+        Platform::Telegram => Box::new(crate::parsers::TelegramParser::new()),
+        #[cfg(feature = "whatsapp")]
+        Platform::WhatsApp => Box::new(crate::parsers::WhatsAppParser::new()),
+        #[cfg(feature = "instagram")]
+        Platform::Instagram => Box::new(crate::parsers::InstagramParser::new()),
+        #[cfg(feature = "discord")]
+        Platform::Discord => Box::new(crate::parsers::DiscordParser::new()),
+        // Fallback for when features are disabled
+        #[allow(unreachable_patterns)]
+        _ => panic!(
+            "Parser for {:?} is not enabled. Enable the corresponding feature.",
+            platform
+        ),
     }
 }
 
@@ -363,23 +406,39 @@ pub fn create_parser(platform: Platform) -> Box<dyn Parser> {
 /// # Example
 ///
 /// ```rust,no_run
+/// # #[cfg(feature = "telegram")]
+/// # fn main() -> chatpack::Result<()> {
 /// use chatpack::parser::{Platform, create_streaming_parser};
 ///
 /// let parser = create_streaming_parser(Platform::Telegram);
 /// for result in parser.stream("large_file.json".as_ref())? {
 ///     // Process each message
 /// }
-/// # Ok::<(), chatpack::ChatpackError>(())
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "telegram"))]
+/// # fn main() {}
 /// ```
+///
+/// # Panics
+///
+/// Panics if the corresponding parser feature is not enabled.
 pub fn create_streaming_parser(platform: Platform) -> Box<dyn Parser> {
-    use crate::parsers::{DiscordParser, InstagramParser, TelegramParser, WhatsAppParser};
-
-    // Return parsers with streaming configs
     match platform {
-        Platform::Telegram => Box::new(TelegramParser::with_streaming()),
-        Platform::WhatsApp => Box::new(WhatsAppParser::with_streaming()),
-        Platform::Instagram => Box::new(InstagramParser::with_streaming()),
-        Platform::Discord => Box::new(DiscordParser::with_streaming()),
+        #[cfg(feature = "telegram")]
+        Platform::Telegram => Box::new(crate::parsers::TelegramParser::with_streaming()),
+        #[cfg(feature = "whatsapp")]
+        Platform::WhatsApp => Box::new(crate::parsers::WhatsAppParser::with_streaming()),
+        #[cfg(feature = "instagram")]
+        Platform::Instagram => Box::new(crate::parsers::InstagramParser::with_streaming()),
+        #[cfg(feature = "discord")]
+        Platform::Discord => Box::new(crate::parsers::DiscordParser::with_streaming()),
+        // Fallback for when features are disabled
+        #[allow(unreachable_patterns)]
+        _ => panic!(
+            "Streaming parser for {:?} is not enabled. Enable the corresponding feature.",
+            platform
+        ),
     }
 }
 
@@ -432,6 +491,7 @@ mod tests {
         assert!(all.contains(&Platform::Discord));
     }
 
+    #[cfg(feature = "telegram")]
     #[test]
     fn test_create_parser() {
         let parser = create_parser(Platform::Telegram);

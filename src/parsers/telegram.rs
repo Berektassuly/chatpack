@@ -12,8 +12,10 @@ use super::ChatParser;
 use crate::config::TelegramConfig;
 use crate::error::ChatpackError;
 use crate::parser::{Parser, Platform};
-use crate::streaming::{StreamingConfig, StreamingParser, TelegramStreamingParser};
 use crate::Message;
+
+#[cfg(feature = "streaming")]
+use crate::streaming::{StreamingConfig, StreamingParser, TelegramStreamingParser};
 
 /// Parser for Telegram JSON exports.
 ///
@@ -174,6 +176,7 @@ impl Parser for TelegramParser {
         self.parse_content(content)
     }
 
+    #[cfg(feature = "streaming")]
     fn stream(
         &self,
         path: &Path,
@@ -197,10 +200,12 @@ impl Parser for TelegramParser {
         }
     }
 
+    #[cfg(feature = "streaming")]
     fn supports_streaming(&self) -> bool {
         self.config.streaming
     }
 
+    #[cfg(feature = "streaming")]
     fn recommended_buffer_size(&self) -> usize {
         self.config.buffer_size
     }

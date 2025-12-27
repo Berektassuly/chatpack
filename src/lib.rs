@@ -15,27 +15,46 @@
 //! tools for filtering, merging, and outputting messages in formats optimized
 //! for use with Large Language Models.
 //!
+//! ## Feature Flags
+//!
+//! Chatpack uses feature flags to minimize dependencies:
+//!
+//! | Feature | Description | Dependencies |
+//! |---------|-------------|--------------|
+//! | `telegram` | Telegram parser | `serde_json` |
+//! | `whatsapp` | WhatsApp parser | `regex` |
+//! | `instagram` | Instagram parser | `serde_json` |
+//! | `discord` | Discord parser | `serde_json`, `regex`, `csv` |
+//! | `csv-output` | CSV output writer | `csv` |
+//! | `json-output` | JSON/JSONL output writers | `serde_json` |
+//! | `streaming` | Streaming parsers for large files | (none) |
+//! | `cli` | CLI support | `clap` |
+//! | `full` | Everything (default) | all above |
+//!
 //! ## Quick Start (New Unified API)
 //!
 //! The new [`parser`] module provides a unified API with streaming support:
 //!
 //! ```rust,no_run
+//! # #[cfg(all(feature = "telegram", feature = "json-output"))]
+//! # fn main() -> chatpack::Result<()> {
 //! use chatpack::parser::{Parser, Platform, create_parser};
 //! use chatpack::prelude::*;
 //!
-//! fn main() -> Result<()> {
-//!     // Parse a Telegram export
-//!     let parser = create_parser(Platform::Telegram);
-//!     let messages = parser.parse("telegram_export.json".as_ref())?;
+//! // Parse a Telegram export
+//! let parser = create_parser(Platform::Telegram);
+//! let messages = parser.parse("telegram_export.json".as_ref())?;
 //!
-//!     // Merge consecutive messages from the same sender
-//!     let merged = merge_consecutive(messages);
+//! // Merge consecutive messages from the same sender
+//! let merged = merge_consecutive(messages);
 //!
-//!     // Write to JSON
-//!     write_json(&merged, "output.json", &OutputConfig::new())?;
+//! // Write to JSON
+//! write_json(&merged, "output.json", &OutputConfig::new())?;
 //!
-//!     Ok(())
-//! }
+//! # Ok(())
+//! # }
+//! # #[cfg(not(all(feature = "telegram", feature = "json-output")))]
+//! # fn main() {}
 //! ```
 //!
 //! ## Streaming for Large Files
@@ -43,6 +62,8 @@
 //! For files larger than 1GB, use the streaming API to avoid memory issues:
 //!
 //! ```rust,no_run
+//! # #[cfg(all(feature = "telegram", feature = "streaming"))]
+//! # fn main() -> chatpack::Result<()> {
 //! use chatpack::parser::{Parser, Platform, create_streaming_parser};
 //!
 //! let parser = create_streaming_parser(Platform::Telegram);
@@ -53,7 +74,10 @@
 //!         println!("{}: {}", msg.sender, msg.content);
 //!     }
 //! }
-//! # Ok::<(), chatpack::ChatpackError>(())
+//! # Ok(())
+//! # }
+//! # #[cfg(not(all(feature = "telegram", feature = "streaming")))]
+//! # fn main() {}
 //! ```
 //!
 //! ## Module Structure
@@ -71,19 +95,49 @@
 //!   - [`core::output`] — [`write_json`], [`write_jsonl`], [`write_csv`]
 //! - [`parsers`] — Chat parsers (legacy + new API)
 //!   - [`TelegramParser`], [`WhatsAppParser`], [`InstagramParser`], [`DiscordParser`]
-//! - [`streaming`] — Streaming parsers for large files
+//! - [`streaming`] — Streaming parsers for large files (requires `streaming` feature)
 //!   - [`TelegramStreamingParser`], [`DiscordStreamingParser`]
-//! - [`cli`] — CLI types ([`Source`], [`OutputFormat`])
+//! - [`cli`] — CLI types (requires `cli` feature)
 //! - [`error`] — Unified error types ([`ChatpackError`], [`Result`])
 //! - [`prelude`] — Convenient re-exports
 
+// CLI module (requires clap)
+#[cfg(feature = "cli")]
 pub mod cli;
+
+// Core modules (always available)
 pub mod config;
 pub mod core;
 pub mod error;
 pub mod message;
+
+// Parser modules - require at least one parser feature
+#[cfg(any(
+    feature = "telegram",
+    feature = "whatsapp",
+    feature = "instagram",
+    feature = "discord"
+))]
 pub mod parser;
+
+#[cfg(any(
+    feature = "telegram",
+    feature = "whatsapp",
+    feature = "instagram",
+    feature = "discord"
+))]
 pub mod parsers;
+
+// Streaming module (requires streaming feature and at least one parser)
+#[cfg(all(
+    feature = "streaming",
+    any(
+        feature = "telegram",
+        feature = "whatsapp",
+        feature = "instagram",
+        feature = "discord"
+    )
+))]
 pub mod streaming;
 
 // Re-export the main types at the crate root for convenience
@@ -106,6 +160,12 @@ pub mod prelude {
     pub use crate::error::{ChatpackError, Result};
 
     // New unified parser API (recommended)
+    #[cfg(any(
+        feature = "telegram",
+        feature = "whatsapp",
+        feature = "instagram",
+        feature = "discord"
+    ))]
     pub use crate::parser::{Parser, Platform};
 
     // Platform configs
@@ -121,14 +181,47 @@ pub mod prelude {
     pub use crate::core::processor::{ProcessingStats, merge_consecutive};
 
     // Output (file writers and string converters)
-    pub use crate::core::output::{to_csv, to_json, to_jsonl, write_csv, write_json, write_jsonl};
+    #[cfg(feature = "csv-output")]
+    pub use crate::core::output::{to_csv, write_csv};
+
+    #[cfg(feature = "json-output")]
+    pub use crate::core::output::{to_json, to_jsonl, write_json, write_jsonl};
 
     // Parsers (implement both Parser and legacy ChatParser traits)
-    pub use crate::parsers::{DiscordParser, InstagramParser, TelegramParser, WhatsAppParser};
+    #[cfg(feature = "telegram")]
+    pub use crate::parsers::TelegramParser;
 
-    // Legacy parser trait (deprecated)
-    pub use crate::parsers::{ChatParser, create_parser};
+    #[cfg(feature = "whatsapp")]
+    pub use crate::parsers::WhatsAppParser;
+
+    #[cfg(feature = "instagram")]
+    pub use crate::parsers::InstagramParser;
+
+    #[cfg(feature = "discord")]
+    pub use crate::parsers::DiscordParser;
+
+    // Legacy parser trait (deprecated) - only available with parsers
+    #[cfg(any(
+        feature = "telegram",
+        feature = "whatsapp",
+        feature = "instagram",
+        feature = "discord"
+    ))]
+    pub use crate::parsers::ChatParser;
+
+    // Legacy create_parser (requires cli feature for Source type)
+    #[cfg(all(
+        feature = "cli",
+        any(
+            feature = "telegram",
+            feature = "whatsapp",
+            feature = "instagram",
+            feature = "discord"
+        )
+    ))]
+    pub use crate::parsers::create_parser;
 
     // CLI types
+    #[cfg(feature = "cli")]
     pub use crate::cli::{OutputFormat, Source};
 }

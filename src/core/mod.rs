@@ -9,11 +9,14 @@
 //! # Quick Start
 //!
 //! ```rust
+//! # #[cfg(all(feature = "csv-output", feature = "json-output"))]
+//! # fn example() {
 //! use chatpack::core::{
 //!     InternalMessage, OutputConfig, FilterConfig,
 //!     merge_consecutive, apply_filters,
 //!     write_csv, write_json, write_jsonl,
 //! };
+//! # }
 //! ```
 
 pub mod filter;
@@ -29,5 +32,11 @@ pub use models::OutputConfig;
 
 // Re-export Message from the new location
 pub use crate::Message;
-pub use output::{write_csv, write_json, write_jsonl};
+
+// Conditionally re-export output writers
+#[cfg(feature = "csv-output")]
+pub use output::{to_csv, write_csv};
+#[cfg(feature = "json-output")]
+pub use output::{to_json, to_jsonl, write_json, write_jsonl};
+
 pub use processor::{ProcessingStats, merge_consecutive};
