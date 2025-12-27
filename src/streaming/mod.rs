@@ -1,57 +1,87 @@
-//! Streaming parsers for memory-efficient processing of large chat exports.
+//! Memory-efficient streaming parsers for large chat exports.
 //!
-//! This module provides streaming alternatives to the standard parsers,
-//! designed for files >1GB where loading everything into memory is impractical.
+//! This module provides streaming alternatives to standard parsers, designed
+//! for files that are too large to fit in memory (>500MB).
 //!
-//! # Architecture
+//! # When to Use Streaming
 //!
-//! The streaming API is built around two core traits:
-//! - [`StreamingParser`] - produces an iterator of messages
-//! - [`MessageIterator`] - the actual iterator implementation
+//! | File Size | Recommendation |
+//! |-----------|----------------|
+//! | < 100MB | Standard parser (faster) |
+//! | 100-500MB | Either works |
+//! | > 500MB | Streaming parser (required) |
 //!
-//! # Example
-//!
-//! ```rust,no_run
-//! # #[cfg(feature = "telegram")]
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use chatpack::streaming::{StreamingParser, TelegramStreamingParser};
-//! use chatpack::Message;
-//!
-//! let parser = TelegramStreamingParser::new();
-//!
-//! // Process messages one at a time, never loading all into memory
-//! for result in parser.stream("large_export.json").unwrap() {
-//!     match result {
-//!         Ok(message) => println!("{}: {}", message.sender, message.content),
-//!         Err(e) => eprintln!("Skipped invalid message: {}", e),
-//!     }
-//! }
-//!
-//! // Or collect with error handling
-//! let messages: Vec<Message> = parser
-//!     .stream("large_export.json")
-//!     .unwrap()
-//!     .filter_map(Result::ok)
-//!     .collect();
-//! # Ok(())
-//! # }
-//! # #[cfg(not(feature = "telegram"))]
-//! # fn main() {}
-//! ```
-//!
-//! # Memory Usage
+//! # Memory Comparison
 //!
 //! | Approach | 1GB File | 10GB File |
 //! |----------|----------|-----------|
 //! | Standard parser | ~3GB RAM | ~30GB RAM |
 //! | Streaming parser | ~50MB RAM | ~50MB RAM |
 //!
-//! # Supported Formats
+//! # Core Types
 //!
-//! - Telegram JSON (via [`TelegramStreamingParser`]) - requires `telegram` feature
-//! - Discord JSONL/JSON (via [`DiscordStreamingParser`]) - requires `discord` feature
-//! - Instagram JSON (via [`InstagramStreamingParser`]) - requires `instagram` feature
-//! - WhatsApp TXT (via [`WhatsAppStreamingParser`]) - requires `whatsapp` feature
+//! | Type | Description |
+//! |------|-------------|
+//! | [`StreamingParser`] | Trait for parsers that produce message iterators |
+//! | [`MessageIterator`] | Iterator over messages with progress tracking |
+//! | [`StreamingConfig`] | Configuration for buffer sizes and behavior |
+//!
+//! # Examples
+//!
+//! ## Basic Usage
+//!
+//! ```no_run
+//! # #[cfg(feature = "telegram")]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::streaming::{StreamingParser, TelegramStreamingParser};
+//!
+//! let parser = TelegramStreamingParser::new();
+//!
+//! for result in parser.stream("large_export.json")? {
+//!     let msg = result?;
+//!     println!("{}: {}", msg.sender, msg.content);
+//! }
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "telegram"))]
+//! # fn main() {}
+//! ```
+//!
+//! ## With Progress Tracking
+//!
+//! ```no_run
+//! # #[cfg(feature = "telegram")]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::streaming::{StreamingParser, TelegramStreamingParser};
+//!
+//! let parser = TelegramStreamingParser::new();
+//! let mut iter = parser.stream("large_export.json")?;
+//! let mut count = 0;
+//!
+//! while let Some(result) = iter.next() {
+//!     let _msg = result?;
+//!     count += 1;
+//!
+//!     if count % 100_000 == 0 {
+//!         if let Some(progress) = iter.progress() {
+//!             println!("{:.1}% complete", progress);
+//!         }
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "telegram"))]
+//! # fn main() {}
+//! ```
+//!
+//! # Available Parsers
+//!
+//! | Parser | Feature | Format |
+//! |--------|---------|--------|
+//! | [`TelegramStreamingParser`] | `telegram` | JSON |
+//! | [`WhatsAppStreamingParser`] | `whatsapp` | TXT |
+//! | [`InstagramStreamingParser`] | `instagram` | JSON |
+//! | [`DiscordStreamingParser`] | `discord` | JSON/JSONL/CSV |
 
 #[cfg(feature = "discord")]
 mod discord;

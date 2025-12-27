@@ -1,85 +1,147 @@
-//! Core message type for chatpack.
+//! Universal message type for all chat platforms.
 //!
-//! This module provides the [`Message`] type, the universal representation
-//! for chat messages from all supported platforms.
+//! This module provides [`Message`], the normalized representation of chat messages.
+//! All platform parsers convert their native formats into this structure, enabling
+//! uniform processing regardless of source.
 //!
-//! # Example
+//! # Overview
 //!
-//! ```rust
+//! A message consists of:
+//! - **Required**: `sender` and `content`
+//! - **Optional**: `timestamp`, `id`, `reply_to`, `edited`
+//!
+//! # Examples
+//!
+//! ## Basic Usage
+//!
+//! ```
+//! use chatpack::Message;
+//!
+//! let msg = Message::new("Alice", "Hello, world!");
+//! assert_eq!(msg.sender(), "Alice");
+//! assert_eq!(msg.content(), "Hello, world!");
+//! ```
+//!
+//! ## Builder Pattern
+//!
+//! ```
 //! use chatpack::Message;
 //! use chrono::Utc;
 //!
-//! // Create a simple message
-//! let msg = Message::new("Alice", "Hello, world!");
-//!
-//! // Create with builder pattern
-//! let msg_with_meta = Message::new("Bob", "Hi there!")
+//! let msg = Message::new("Bob", "Check this out!")
 //!     .with_id(12345)
-//!     .with_timestamp(Utc::now());
+//!     .with_timestamp(Utc::now())
+//!     .with_reply_to(12344);
+//!
+//! assert!(msg.has_metadata());
+//! ```
+//!
+//! ## Serialization
+//!
+//! ```
+//! use chatpack::Message;
+//!
+//! let msg = Message::new("Alice", "Hello!");
+//! let json = serde_json::to_string(&msg)?;
+//! let parsed: Message = serde_json::from_str(&json)?;
+//!
+//! assert_eq!(msg, parsed);
+//! # Ok::<(), serde_json::Error>(())
 //! ```
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// A chat message with optional metadata.
+/// A normalized chat message from any supported platform.
 ///
-/// This is the universal message representation used across all chat sources.
-/// All parsers convert their native format into this structure, enabling
-/// uniform processing regardless of the original chat platform.
+/// This struct is the core data type in chatpack. All platform-specific parsers
+/// convert their native message formats into this universal representation,
+/// enabling uniform processing, filtering, and export.
 ///
 /// # Fields
 ///
-/// - `sender` and `content` are always present
-/// - `timestamp`, `id`, `reply_to`, and `edited` are optional metadata
+/// | Field | Type | Description |
+/// |-------|------|-------------|
+/// | `sender` | `String` | Display name or username of the message author |
+/// | `content` | `String` | Text content of the message |
+/// | `timestamp` | `Option<DateTime<Utc>>` | When the message was sent |
+/// | `id` | `Option<u64>` | Platform-specific message identifier |
+/// | `reply_to` | `Option<u64>` | ID of the parent message (for replies) |
+/// | `edited` | `Option<DateTime<Utc>>` | When the message was last edited |
 ///
-/// # Serialization
+/// # Construction
 ///
-/// The struct implements both `Serialize` and `Deserialize`, making it
-/// suitable for:
-/// - Saving/loading processed messages
-/// - Inter-process communication
-/// - Integration with other systems (RAG pipelines, databases, etc.)
+/// Use [`Message::new`] for simple messages or the builder pattern for metadata:
 ///
-/// Optional fields are skipped during serialization when `None`.
-///
-/// # Example
-///
-/// ```rust
+/// ```
 /// use chatpack::Message;
 /// use chrono::Utc;
 ///
+/// // Simple message
+/// let msg = Message::new("Alice", "Hello!");
+///
+/// // With metadata
 /// let msg = Message::new("Alice", "Hello!")
 ///     .with_timestamp(Utc::now())
 ///     .with_id(12345);
+/// ```
 ///
-/// assert_eq!(msg.sender(), "Alice");
-/// assert_eq!(msg.content(), "Hello!");
-/// assert!(msg.id().is_some());
+/// # Serialization
+///
+/// Implements `Serialize` and `Deserialize` with these behaviors:
+/// - Optional fields are omitted from JSON when `None`
+/// - Timestamps use RFC 3339 format
+/// - Suitable for storage, IPC, and RAG pipelines
+///
+/// ```
+/// use chatpack::Message;
+///
+/// let msg = Message::new("Alice", "Hello!").with_id(123);
+/// let json = serde_json::to_string(&msg)?;
+///
+/// // timestamp is omitted (None)
+/// assert!(!json.contains("timestamp"));
+/// assert!(json.contains("123"));
+/// # Ok::<(), serde_json::Error>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
-    /// Message sender name/username
+    /// Display name or username of the message author.
     pub sender: String,
 
-    /// Message text content
+    /// Text content of the message.
+    ///
+    /// May contain newlines for multiline messages. Platform-specific
+    /// attachments (images, files) are typically represented as text
+    /// placeholders like `[Attachment: image.png]`.
     pub content: String,
 
-    /// Message timestamp (if available from source)
+    /// When the message was originally sent.
+    ///
+    /// Available from most platforms except some WhatsApp export formats.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub timestamp: Option<DateTime<Utc>>,
 
-    /// Platform-specific message ID (if available)
+    /// Platform-specific message identifier.
+    ///
+    /// - Telegram: message ID from the chat
+    /// - Discord: snowflake ID
+    /// - WhatsApp/Instagram: typically not available in exports
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub id: Option<u64>,
 
-    /// ID of the message this is replying to (if available)
+    /// ID of the message this is replying to.
+    ///
+    /// Enables reconstruction of reply chains and conversation threads.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub reply_to: Option<u64>,
 
-    /// Timestamp when message was last edited (if available)
+    /// When the message was last edited.
+    ///
+    /// Present when the platform tracks edit history (Telegram, Discord).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub edited: Option<DateTime<Utc>>,

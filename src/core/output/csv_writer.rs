@@ -1,4 +1,7 @@
-//! CSV output writer.
+//! CSV output writer with semicolon delimiter.
+//!
+//! CSV format provides the best token efficiency for LLM context windows,
+//! achieving up to 13x compression compared to raw chat exports.
 
 use std::fs::File;
 
@@ -6,17 +9,38 @@ use crate::Message;
 use crate::core::models::OutputConfig;
 use crate::error::ChatpackError;
 
-/// Writes messages to CSV file with semicolon delimiter.
+/// Writes messages to a CSV file.
+///
+/// Uses semicolon (`;`) as delimiter for Excel compatibility and to avoid
+/// conflicts with commas in message content.
 ///
 /// # Format
-/// - Delimiter: `;`
-/// - Columns: Depends on `OutputConfig`
-///   - Basic: `Sender`, `Content`
-///   - With timestamps: `Timestamp`, `Sender`, `Content`
-///   - With IDs: `ID`, `Sender`, `Content`
-///   - With replies: `Sender`, `Content`, `ReplyTo`
-///   - With edited: `Sender`, `Content`, `Edited`
-/// - Encoding: UTF-8
+///
+/// Columns depend on [`OutputConfig`]:
+/// - Base: `Sender`, `Content`
+/// - `with_timestamps()`: adds `Timestamp` column
+/// - `with_ids()`: adds `ID` column
+/// - `with_replies()`: adds `ReplyTo` column
+/// - `with_edited()`: adds `Edited` column
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[cfg(feature = "csv-output")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::prelude::*;
+///
+/// let messages = vec![Message::new("Alice", "Hello!")];
+/// write_csv(&messages, "output.csv", &OutputConfig::new())?;
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "csv-output"))]
+/// # fn main() {}
+/// ```
+///
+/// # Errors
+///
+/// Returns [`ChatpackError::Io`] if the file cannot be created or written.
 pub fn write_csv(
     messages: &[Message],
     output_path: &str,
@@ -39,10 +63,31 @@ pub fn write_csv(
     Ok(())
 }
 
-/// Converts messages to CSV string with semicolon delimiter.
+/// Converts messages to a CSV string.
 ///
-/// Same format as `write_csv`, but returns a String instead of writing to file.
-/// Useful for WASM environments where file system access is not available.
+/// Same format as [`write_csv`], but returns a [`String`] instead of writing
+/// to a file. Useful for WASM environments or when you need the output in memory.
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(feature = "csv-output")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::prelude::*;
+///
+/// let messages = vec![
+///     Message::new("Alice", "Hello"),
+///     Message::new("Bob", "Hi"),
+/// ];
+///
+/// let csv = to_csv(&messages, &OutputConfig::new())?;
+/// assert!(csv.contains("Sender;Content"));
+/// assert!(csv.contains("Alice;Hello"));
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "csv-output"))]
+/// # fn main() {}
+/// ```
 pub fn to_csv(messages: &[Message], config: &OutputConfig) -> Result<String, ChatpackError> {
     let mut writer = csv::WriterBuilder::new()
         .delimiter(b';')
