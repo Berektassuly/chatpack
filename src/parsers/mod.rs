@@ -153,6 +153,7 @@ pub fn create_parser(source: crate::cli::Source) -> Box<dyn ChatParser> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // Tests for deprecated ChatParser API (backward compatibility)
 mod tests {
     use super::*;
 
