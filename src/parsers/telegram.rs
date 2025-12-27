@@ -1,13 +1,18 @@
 //! Telegram JSON export parser.
 
 use std::fs;
+use std::path::Path;
 
 use chrono::DateTime;
 use serde::Deserialize;
 use serde_json::Value;
 
+#[allow(deprecated)]
 use super::ChatParser;
+use crate::config::TelegramConfig;
 use crate::error::ChatpackError;
+use crate::parser::{Parser, Platform};
+use crate::streaming::{StreamingConfig, StreamingParser, TelegramStreamingParser};
 use crate::Message;
 
 /// Parser for Telegram JSON exports.
@@ -29,57 +34,49 @@ use crate::Message;
 ///   ]
 /// }
 /// ```
-pub struct TelegramParser;
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use chatpack::parsers::TelegramParser;
+/// use chatpack::parser::Parser;
+///
+/// let parser = TelegramParser::new();
+/// let messages = parser.parse("telegram_export.json".as_ref())?;
+/// # Ok::<(), chatpack::ChatpackError>(())
+/// ```
+pub struct TelegramParser {
+    config: TelegramConfig,
+}
 
 impl TelegramParser {
+    /// Creates a new parser with default configuration.
     pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for TelegramParser {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// Internal structures for deserializing Telegram JSON
-
-#[derive(Debug, Deserialize)]
-struct TelegramExport {
-    messages: Vec<TelegramMessage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TelegramMessage {
-    /// Message ID
-    id: Option<u64>,
-    /// Message type (we only care about "message")
-    #[serde(rename = "type")]
-    msg_type: String,
-    /// Unix timestamp as string
-    date_unixtime: Option<String>,
-    /// Sender name
-    from: Option<String>,
-    /// Message text (can be string or array)
-    text: Option<Value>,
-    /// Reply reference
-    reply_to_message_id: Option<u64>,
-    /// Edit timestamp as string (if message was edited)
-    edited_unixtime: Option<String>,
-}
-
-impl ChatParser for TelegramParser {
-    fn name(&self) -> &'static str {
-        "Telegram"
+        Self {
+            config: TelegramConfig::default(),
+        }
     }
 
-    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
-        let content = fs::read_to_string(file_path)?;
-        self.parse_str(&content)
+    /// Creates a parser with custom configuration.
+    pub fn with_config(config: TelegramConfig) -> Self {
+        Self { config }
     }
 
-    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+    /// Creates a parser optimized for streaming large files.
+    pub fn with_streaming() -> Self {
+        Self {
+            config: TelegramConfig::streaming(),
+        }
+    }
+
+    /// Returns the current configuration.
+    pub fn config(&self) -> &TelegramConfig {
+        &self.config
+    }
+
+    /// Parses content from a string (internal implementation).
+    #[allow(clippy::unused_self)] // Keep &self for consistency with other parsers and future config use
+    fn parse_content(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let export: TelegramExport = serde_json::from_str(content)?;
 
         let messages = export
@@ -123,6 +120,106 @@ impl ChatParser for TelegramParser {
             .collect();
 
         Ok(messages)
+    }
+}
+
+impl Default for TelegramParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// Internal structures for deserializing Telegram JSON
+
+#[derive(Debug, Deserialize)]
+struct TelegramExport {
+    messages: Vec<TelegramMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramMessage {
+    /// Message ID
+    id: Option<u64>,
+    /// Message type (we only care about "message")
+    #[serde(rename = "type")]
+    msg_type: String,
+    /// Unix timestamp as string
+    date_unixtime: Option<String>,
+    /// Sender name
+    from: Option<String>,
+    /// Message text (can be string or array)
+    text: Option<Value>,
+    /// Reply reference
+    reply_to_message_id: Option<u64>,
+    /// Edit timestamp as string (if message was edited)
+    edited_unixtime: Option<String>,
+}
+
+// Implement the new unified Parser trait
+impl Parser for TelegramParser {
+    fn name(&self) -> &'static str {
+        "Telegram"
+    }
+
+    fn platform(&self) -> Platform {
+        Platform::Telegram
+    }
+
+    fn parse(&self, path: &Path) -> Result<Vec<Message>, ChatpackError> {
+        let content = fs::read_to_string(path)?;
+        self.parse_content(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_content(content)
+    }
+
+    fn stream(
+        &self,
+        path: &Path,
+    ) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError>
+    {
+        if self.config.streaming {
+            // Use native streaming parser
+            let streaming_config = StreamingConfig::new()
+                .with_buffer_size(self.config.buffer_size)
+                .with_max_message_size(self.config.max_message_size)
+                .with_skip_invalid(self.config.skip_invalid);
+
+            let streaming_parser = TelegramStreamingParser::with_config(streaming_config);
+            let iterator = StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
+
+            Ok(Box::new(iterator.map(|result| result.map_err(ChatpackError::from))))
+        } else {
+            // Fallback: load everything into memory
+            let messages = Parser::parse(self, path)?;
+            Ok(Box::new(messages.into_iter().map(Ok)))
+        }
+    }
+
+    fn supports_streaming(&self) -> bool {
+        self.config.streaming
+    }
+
+    fn recommended_buffer_size(&self) -> usize {
+        self.config.buffer_size
+    }
+}
+
+// Keep backward compatibility with ChatParser trait
+#[allow(deprecated)]
+impl ChatParser for TelegramParser {
+    fn name(&self) -> &'static str {
+        "Telegram"
+    }
+
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
+        let content = fs::read_to_string(file_path)?;
+        self.parse_content(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_content(content)
     }
 }
 
@@ -182,6 +279,6 @@ mod tests {
     #[test]
     fn test_parser_name() {
         let parser = TelegramParser::new();
-        assert_eq!(parser.name(), "Telegram");
+        assert_eq!(Parser::name(&parser), "Telegram");
     }
 }

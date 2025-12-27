@@ -7,12 +7,17 @@
 //! causing Cyrillic and other non-ASCII text to appear as garbage (Mojibake).
 
 use std::fs;
+use std::path::Path;
 
 use chrono::{TimeZone, Utc};
 use serde::Deserialize;
 
+#[allow(deprecated)]
 use super::ChatParser;
+use crate::config::InstagramConfig;
 use crate::error::ChatpackError;
+use crate::parser::{Parser, Platform};
+use crate::streaming::{InstagramStreamingParser, StreamingConfig, StreamingParser};
 use crate::Message;
 
 #[derive(Debug, Deserialize)]
@@ -42,33 +47,51 @@ fn fix_encoding(s: &str) -> String {
 }
 
 /// Parser for Instagram JSON exports.
-pub struct InstagramParser;
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use chatpack::parsers::InstagramParser;
+/// use chatpack::parser::Parser;
+///
+/// let parser = InstagramParser::new();
+/// let messages = parser.parse("instagram_messages.json".as_ref())?;
+/// # Ok::<(), chatpack::ChatpackError>(())
+/// ```
+pub struct InstagramParser {
+    config: InstagramConfig,
+}
 
 impl InstagramParser {
+    /// Creates a new parser with default configuration.
     pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for InstagramParser {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ChatParser for InstagramParser {
-    fn name(&self) -> &'static str {
-        "Instagram"
+        Self {
+            config: InstagramConfig::default(),
+        }
     }
 
-    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
-        let content = fs::read_to_string(file_path)?;
-        self.parse_str(&content)
+    /// Creates a parser with custom configuration.
+    pub fn with_config(config: InstagramConfig) -> Self {
+        Self { config }
     }
 
-    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+    /// Creates a parser optimized for streaming large files.
+    pub fn with_streaming() -> Self {
+        Self {
+            config: InstagramConfig::streaming(),
+        }
+    }
+
+    /// Returns the current configuration.
+    pub fn config(&self) -> &InstagramConfig {
+        &self.config
+    }
+
+    /// Parses content from a string (internal implementation).
+    fn parse_content(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let export: InstagramExport = serde_json::from_str(content)?;
 
+        let fix = self.config.fix_encoding;
         let mut messages: Vec<Message> = export
             .messages
             .into_iter()
@@ -81,13 +104,25 @@ impl ChatParser for InstagramParser {
 
                 let timestamp = Utc.timestamp_millis_opt(msg.timestamp_ms).single()?;
 
+                let sender = if fix {
+                    fix_encoding(&msg.sender_name)
+                } else {
+                    msg.sender_name
+                };
+
+                let content = if fix {
+                    fix_encoding(&msg_content)
+                } else {
+                    msg_content
+                };
+
                 Some(Message {
                     id: None,
                     timestamp: Some(timestamp),
-                    sender: fix_encoding(&msg.sender_name),
+                    sender,
                     reply_to: None,
                     edited: None,
-                    content: fix_encoding(&msg_content),
+                    content,
                 })
             })
             .collect();
@@ -96,5 +131,79 @@ impl ChatParser for InstagramParser {
         messages.reverse();
 
         Ok(messages)
+    }
+}
+
+impl Default for InstagramParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// Implement the new unified Parser trait
+impl Parser for InstagramParser {
+    fn name(&self) -> &'static str {
+        "Instagram"
+    }
+
+    fn platform(&self) -> Platform {
+        Platform::Instagram
+    }
+
+    fn parse(&self, path: &Path) -> Result<Vec<Message>, ChatpackError> {
+        let content = fs::read_to_string(path)?;
+        self.parse_content(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_content(content)
+    }
+
+    fn stream(
+        &self,
+        path: &Path,
+    ) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError>
+    {
+        if self.config.streaming {
+            // Use native streaming parser
+            let streaming_config = StreamingConfig::new()
+                .with_buffer_size(self.config.buffer_size)
+                .with_max_message_size(self.config.max_message_size)
+                .with_skip_invalid(self.config.skip_invalid);
+
+            let streaming_parser = InstagramStreamingParser::with_config(streaming_config);
+            let iterator = StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
+
+            Ok(Box::new(iterator.map(|result| result.map_err(ChatpackError::from))))
+        } else {
+            // Fallback: load everything into memory
+            let messages = Parser::parse(self, path)?;
+            Ok(Box::new(messages.into_iter().map(Ok)))
+        }
+    }
+
+    fn supports_streaming(&self) -> bool {
+        self.config.streaming
+    }
+
+    fn recommended_buffer_size(&self) -> usize {
+        self.config.buffer_size
+    }
+}
+
+// Keep backward compatibility with ChatParser trait
+#[allow(deprecated)]
+impl ChatParser for InstagramParser {
+    fn name(&self) -> &'static str {
+        "Instagram"
+    }
+
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
+        let content = fs::read_to_string(file_path)?;
+        self.parse_content(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_content(content)
     }
 }
