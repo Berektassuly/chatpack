@@ -1,46 +1,61 @@
-//! Output format writers.
+//! Export messages to CSV, JSON, and JSONL formats.
 //!
-//! This module provides writers for different output formats:
-//! - [`write_csv`] / [`to_csv`] - CSV with semicolon delimiter (best for LLMs) - requires `csv-output` feature
-//! - [`write_json`] / [`to_json`] - JSON array of messages - requires `json-output` feature
-//! - [`write_jsonl`] / [`to_jsonl`] - JSON Lines (one JSON per line, best for RAG) - requires `json-output` feature
+//! This module provides format writers optimized for different use cases.
+//! Each format has both file-writing and string-generating variants.
 //!
-//! # Choosing a Format
+//! # Format Comparison
 //!
-//! | Format | Use Case | Token Efficiency |
-//! |--------|----------|-----------------|
-//! | CSV | ChatGPT/Claude context | ⭐⭐⭐ Best (13x compression) |
-//! | JSON | Structured data, APIs | ⭐ Good |
-//! | JSONL | RAG pipelines, streaming | ⭐⭐ Better |
+//! | Format | Function | Feature | Best For |
+//! |--------|----------|---------|----------|
+//! | CSV | [`write_csv`] / [`to_csv`] | `csv-output` | LLM context (13x compression) |
+//! | JSON | [`write_json`] / [`to_json`] | `json-output` | APIs, structured data |
+//! | JSONL | [`write_jsonl`] / [`to_jsonl`] | `json-output` | RAG pipelines, streaming |
 //!
-//! # Example
+//! # Examples
 //!
-//! ```rust,no_run
+//! ## Write to Files
+//!
+//! ```no_run
 //! # #[cfg(all(feature = "csv-output", feature = "json-output"))]
 //! # fn main() -> chatpack::Result<()> {
-//! use chatpack::core::output::{write_csv, write_json, write_jsonl, to_csv};
-//! use chatpack::core::models::OutputConfig;
-//! use chatpack::Message;
+//! use chatpack::prelude::*;
 //!
 //! let messages = vec![
 //!     Message::new("Alice", "Hello!"),
 //!     Message::new("Bob", "Hi there!"),
 //! ];
-//!
 //! let config = OutputConfig::new().with_timestamps();
 //!
-//! // Write to files
 //! write_csv(&messages, "output.csv", &config)?;
 //! write_json(&messages, "output.json", &config)?;
 //! write_jsonl(&messages, "output.jsonl", &config)?;
-//!
-//! // Or get as strings (useful for WASM)
-//! let csv_string = to_csv(&messages, &config)?;
 //! # Ok(())
 //! # }
 //! # #[cfg(not(all(feature = "csv-output", feature = "json-output")))]
 //! # fn main() {}
 //! ```
+//!
+//! ## Generate Strings (WASM-friendly)
+//!
+//! ```
+//! # #[cfg(feature = "csv-output")]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::prelude::*;
+//!
+//! let messages = vec![Message::new("Alice", "Hello!")];
+//! let csv = to_csv(&messages, &OutputConfig::new())?;
+//!
+//! assert!(csv.contains("Alice"));
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "csv-output"))]
+//! # fn main() {}
+//! ```
+//!
+//! # Feature Flags
+//!
+//! - `csv-output`: Enables CSV functions ([`write_csv`], [`to_csv`])
+//! - `json-output`: Enables JSON functions ([`write_json`], [`to_json`], [`write_jsonl`], [`to_jsonl`])
 
 #[cfg(feature = "csv-output")]
 mod csv_writer;

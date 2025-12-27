@@ -1,65 +1,95 @@
-//! Core data models for chat output configuration.
+//! Output configuration for message export.
 //!
-//! This module provides the [`OutputConfig`] type for configuring output generation.
+//! This module provides [`OutputConfig`] for controlling which metadata fields
+//! are included when exporting messages to CSV, JSON, or JSONL formats.
 //!
-//! # Example
+//! # Overview
 //!
-//! ```rust
-//! use chatpack::Message;
+//! By default, only `sender` and `content` are included in output. Use the
+//! builder pattern to selectively enable additional fields:
+//!
+//! | Method | Field | Description |
+//! |--------|-------|-------------|
+//! | [`with_timestamps`](OutputConfig::with_timestamps) | `timestamp` | When message was sent |
+//! | [`with_ids`](OutputConfig::with_ids) | `id` | Platform-specific message ID |
+//! | [`with_replies`](OutputConfig::with_replies) | `reply_to` | Parent message reference |
+//! | [`with_edited`](OutputConfig::with_edited) | `edited` | Last edit timestamp |
+//!
+//! # Examples
+//!
+//! ```
 //! use chatpack::core::models::OutputConfig;
-//! use chrono::Utc;
 //!
-//! // Create a simple message
-//! let msg = Message::new("Alice", "Hello, world!");
+//! // Minimal output (sender + content only)
+//! let minimal = OutputConfig::new();
+//! assert!(!minimal.has_any());
 //!
-//! // Create with builder pattern
-//! let msg_with_meta = Message::new("Bob", "Hi there!")
-//!     .with_id(12345)
-//!     .with_timestamp(Utc::now());
+//! // Include timestamps
+//! let with_time = OutputConfig::new().with_timestamps();
 //!
-//! // Configure output
-//! let config = OutputConfig::new()
-//!     .with_timestamps()
-//!     .with_replies();
+//! // Include everything
+//! let full = OutputConfig::all();
+//! assert!(full.include_timestamps);
+//! assert!(full.include_ids);
 //! ```
 
 use serde::{Deserialize, Serialize};
 
-/// Configuration for output format.
+/// Controls which message fields are included in output.
 ///
-/// Controls which metadata fields are included in the output when writing
-/// to CSV, JSON, or JSONL formats.
+/// Used by [`write_csv`](crate::core::output::write_csv),
+/// [`write_json`](crate::core::output::write_json), and
+/// [`write_jsonl`](crate::core::output::write_jsonl) to determine
+/// which optional fields to include.
 ///
-/// # Example
+/// # Default Behavior
 ///
-/// ```rust
-/// use chatpack::core::models::OutputConfig;
+/// By default, only `sender` and `content` are included. This produces
+/// the most compact output, optimal for LLM context windows.
 ///
-/// // Default: only sender and content
-/// let minimal = OutputConfig::new();
+/// # Examples
 ///
-/// // Include all available metadata
-/// let full = OutputConfig::new()
+/// ```no_run
+/// # #[cfg(feature = "csv-output")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::prelude::*;
+///
+/// let messages = vec![Message::new("Alice", "Hello!")];
+///
+/// // Minimal output
+/// write_csv(&messages, "minimal.csv", &OutputConfig::new())?;
+///
+/// // With timestamps and IDs
+/// let config = OutputConfig::new()
 ///     .with_timestamps()
-///     .with_ids()
-///     .with_replies()
-///     .with_edited();
+///     .with_ids();
+/// write_csv(&messages, "detailed.csv", &config)?;
 ///
-/// // Or use the convenience method
-/// let full = OutputConfig::all();
+/// // Everything
+/// write_csv(&messages, "full.csv", &OutputConfig::all())?;
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "csv-output"))]
+/// # fn main() {}
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct OutputConfig {
-    /// Include timestamps in output
+    /// Include message timestamps in output.
+    ///
+    /// Timestamps are formatted as RFC 3339 in JSON, ISO 8601 in CSV.
     pub include_timestamps: bool,
 
-    /// Include message IDs in output
+    /// Include platform-specific message IDs in output.
     pub include_ids: bool,
 
-    /// Include reply references in output
+    /// Include reply-to references in output.
+    ///
+    /// Useful for reconstructing conversation threads.
     pub include_replies: bool,
 
-    /// Include edited timestamps in output
+    /// Include edit timestamps in output.
+    ///
+    /// Shows when messages were last modified.
     pub include_edited: bool,
 }
 

@@ -1,13 +1,7 @@
-//! `WhatsApp` TXT export parser.
+//! WhatsApp TXT export parser.
 //!
-//! `WhatsApp` exports vary by locale. This parser auto-detects the format
-//! by analyzing the first 20 lines of the file.
-//!
-//! Supported formats:
-//! - US: `[1/15/24, 10:30:45 AM] Sender: Message`
-//! - EU: `[15.01.24, 10:30:45] Sender: Message`
-//! - EU2: `15/01/2024, 10:30 - Sender: Message`
-//! - RU: `15.01.2024, 10:30 - Sender: Message`
+//! Parses plain text exports from WhatsApp's "Export Chat" feature.
+//! Auto-detects locale-specific date formats.
 
 use std::fs;
 use std::path::Path;
@@ -27,15 +21,38 @@ use crate::streaming::{StreamingConfig, StreamingParser, WhatsAppStreamingParser
 
 /// Parser for WhatsApp TXT exports.
 ///
-/// # Example
+/// Handles plain text chat exports from WhatsApp on iOS and Android.
+/// The format varies by locale; this parser auto-detects the format
+/// by analyzing the first few lines.
 ///
-/// ```rust,no_run
+/// # Supported Date Formats
+///
+/// | Format | Example | Region |
+/// |--------|---------|--------|
+/// | US | `[1/15/24, 10:30:45 AM] Sender: Message` | United States |
+/// | EU | `[15.01.24, 10:30:45] Sender: Message` | Europe |
+/// | EU2 | `15/01/2024, 10:30 - Sender: Message` | Europe (alt) |
+/// | RU | `15.01.2024, 10:30 - Sender: Message` | Russia |
+///
+/// # Handling
+///
+/// - Multiline messages are properly joined
+/// - System messages (joins, leaves) are filtered out
+/// - Attachments are represented as `[Attachment]` placeholders
+///
+/// # Examples
+///
+/// ```no_run
 /// use chatpack::parsers::WhatsAppParser;
 /// use chatpack::parser::Parser;
 ///
+/// # fn main() -> chatpack::Result<()> {
 /// let parser = WhatsAppParser::new();
-/// let messages = parser.parse("whatsapp_chat.txt".as_ref())?;
-/// # Ok::<(), chatpack::ChatpackError>(())
+/// let messages = parser.parse("_chat.txt".as_ref())?;
+///
+/// println!("Parsed {} messages", messages.len());
+/// # Ok(())
+/// # }
 /// ```
 pub struct WhatsAppParser {
     config: WhatsAppConfig,

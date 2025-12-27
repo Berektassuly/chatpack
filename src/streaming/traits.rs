@@ -1,18 +1,51 @@
 //! Core traits for streaming parsers.
+//!
+//! This module defines the trait hierarchy for memory-efficient streaming:
+//! - [`MessageIterator`] - Iterator with progress tracking
+//! - [`StreamingParser`] - Parser that produces iterators
+//! - [`StreamingConfig`] - Configuration options
 
 use crate::Message;
 use crate::error::ChatpackError;
 
 use super::StreamingResult;
 
-/// Iterator over messages from a streaming parser.
+/// Iterator over messages from a streaming parser with progress tracking.
 ///
-/// This trait is object-safe and allows for dynamic dispatch,
-/// enabling runtime selection of streaming parsers.
+/// Extends the standard [`Iterator`] trait with methods for monitoring
+/// parsing progress, useful for progress bars and logging.
+///
+/// # Object Safety
+///
+/// This trait is object-safe, enabling dynamic dispatch via `Box<dyn MessageIterator>`.
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[cfg(feature = "telegram")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::streaming::{StreamingParser, TelegramStreamingParser, MessageIterator};
+///
+/// let parser = TelegramStreamingParser::new();
+/// let mut iter = parser.stream("export.json")?;
+///
+/// while let Some(result) = iter.next() {
+///     let msg = result?;
+///
+///     // Check progress periodically
+///     if let Some(pct) = iter.progress() {
+///         eprintln!("\r{:.1}%", pct);
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "telegram"))]
+/// # fn main() {}
+/// ```
 pub trait MessageIterator: Iterator<Item = StreamingResult<Message>> + Send {
-    /// Returns approximate progress as a percentage (0.0 - 100.0).
+    /// Returns approximate progress as a percentage (0.0 to 100.0).
     ///
-    /// Returns `None` if progress cannot be determined.
+    /// Returns `None` if progress cannot be determined (e.g., unknown file size).
     fn progress(&self) -> Option<f64> {
         None
     }
@@ -26,54 +59,93 @@ pub trait MessageIterator: Iterator<Item = StreamingResult<Message>> + Send {
     }
 }
 
-/// A parser that can stream messages from large files.
+/// A parser that streams messages from files without loading everything into memory.
 ///
-/// Unlike [`ChatParser`], which loads everything into memory,
-/// `StreamingParser` produces an iterator that yields messages one at a time.
+/// Unlike standard parsers that load the entire file, `StreamingParser` produces
+/// an iterator that yields messages one at a time, enabling processing of
+/// arbitrarily large files with constant memory usage.
 ///
-/// # Implementation Notes
+/// # Implementation Guidelines
 ///
 /// Implementors should:
-/// - Use buffered I/O with reasonable buffer sizes (64KB - 1MB)
-/// - Handle malformed records gracefully (skip and continue)
-/// - Provide progress reporting when possible
+/// - Use buffered I/O (64KB - 1MB buffers)
+/// - Skip malformed records gracefully
+/// - Track bytes processed for progress reporting
 ///
-/// [`ChatParser`]: crate::parsers::ChatParser
+/// # Examples
+///
+/// ```no_run
+/// # #[cfg(feature = "telegram")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::streaming::{StreamingParser, TelegramStreamingParser};
+///
+/// let parser = TelegramStreamingParser::new();
+/// let messages: Vec<_> = parser
+///     .stream("export.json")?
+///     .filter_map(Result::ok)
+///     .collect();
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "telegram"))]
+/// # fn main() {}
+/// ```
 pub trait StreamingParser: Send + Sync {
-    /// Returns the name of this parser.
+    /// Returns the human-readable name of this parser.
     fn name(&self) -> &'static str;
 
     /// Opens a file and returns an iterator over messages.
     ///
     /// # Errors
     ///
-    /// Returns an error if the file cannot be opened or has invalid format.
+    /// Returns [`ChatpackError::Io`] if the file cannot be opened.
     fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, ChatpackError>;
 
     /// Returns the recommended buffer size for this parser.
+    ///
+    /// Default: 64KB
     fn recommended_buffer_size(&self) -> usize {
         64 * 1024 // 64KB default
     }
 
-    /// Returns true if this parser supports progress reporting.
+    /// Returns `true` if this parser supports progress reporting.
     fn supports_progress(&self) -> bool {
         true
     }
 }
 
-/// Configuration for streaming parsers.
+/// Configuration options for streaming parsers.
+///
+/// Controls buffer sizes, error handling, and progress reporting behavior.
+///
+/// # Examples
+///
+/// ```
+/// use chatpack::streaming::StreamingConfig;
+///
+/// let config = StreamingConfig::new()
+///     .with_buffer_size(128 * 1024)  // 128KB buffer
+///     .with_skip_invalid(false);      // Return errors instead of skipping
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct StreamingConfig {
-    /// Buffer size for reading (default: 64KB)
+    /// Buffer size for file reading.
+    ///
+    /// Default: 64KB. Larger buffers improve throughput but use more memory.
     pub buffer_size: usize,
 
-    /// Maximum size of a single message in bytes (default: 10MB)
+    /// Maximum size of a single message in bytes.
+    ///
+    /// Default: 10MB. Messages exceeding this are skipped or error.
     pub max_message_size: usize,
 
-    /// Whether to skip invalid messages or return errors (default: skip)
+    /// Whether to skip invalid messages or return errors.
+    ///
+    /// Default: `true` (skip). Set to `false` for strict validation.
     pub skip_invalid: bool,
 
-    /// Report progress every N messages (default: 10000)
+    /// Report progress every N messages.
+    ///
+    /// Default: 10,000. Lower values provide more frequent updates.
     pub progress_interval: usize,
 }
 

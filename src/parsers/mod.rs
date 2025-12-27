@@ -1,35 +1,67 @@
-//! Chat export parsers for various platforms.
+//! Platform-specific chat export parsers.
 //!
-//! This module provides parsers for chat exports from different messaging platforms.
-//! Each parser implements the [`Parser`] trait from [`crate::parser`].
+//! This module provides parser implementations for each supported messaging platform.
+//! All parsers implement the [`Parser`] trait, providing a consistent interface.
 //!
 //! # Available Parsers
 //!
-//! - [`TelegramParser`] - Parses Telegram JSON exports (requires `telegram` feature)
-//! - [`WhatsAppParser`] - Parses WhatsApp TXT exports (requires `whatsapp` feature)
-//! - [`InstagramParser`] - Parses Instagram JSON exports (requires `instagram` feature)
-//! - [`DiscordParser`] - Parses Discord JSON/TXT/CSV exports (requires `discord` feature)
+//! | Parser | Feature | Export Format | Special Handling |
+//! |--------|---------|---------------|------------------|
+//! | [`TelegramParser`] | `telegram` | JSON | Service messages, forwards |
+//! | [`WhatsAppParser`] | `whatsapp` | TXT | Auto-detects 4 date formats |
+//! | [`InstagramParser`] | `instagram` | JSON | Fixes Mojibake encoding |
+//! | [`DiscordParser`] | `discord` | JSON/TXT/CSV | Attachments, stickers |
 //!
-//! # Usage
+//! # Examples
 //!
-//! ```rust,no_run
+//! ## Direct Parser Usage
+//!
+//! ```no_run
+//! # #[cfg(feature = "telegram")]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::parser::Parser;
+//! use chatpack::parsers::TelegramParser;
+//!
+//! let parser = TelegramParser::new();
+//! let messages = parser.parse("result.json".as_ref())?;
+//!
+//! println!("Parsed {} messages", messages.len());
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "telegram"))]
+//! # fn main() {}
+//! ```
+//!
+//! ## Dynamic Parser Selection
+//!
+//! ```no_run
 //! # #[cfg(feature = "telegram")]
 //! # fn main() -> chatpack::Result<()> {
 //! use chatpack::parser::{Parser, Platform, create_parser};
 //!
 //! let parser = create_parser(Platform::Telegram);
-//! let messages = parser.parse("telegram_export.json".as_ref())?;
-//!
-//! // Or stream for large files
-//! # #[cfg(feature = "streaming")]
-//! let parser = chatpack::parser::create_streaming_parser(Platform::Telegram);
-//! # #[cfg(feature = "streaming")]
-//! for result in parser.stream("large_export.json".as_ref())? {
-//!     // Process each message
-//! }
+//! let messages = parser.parse("result.json".as_ref())?;
 //! # Ok(())
 //! # }
 //! # #[cfg(not(feature = "telegram"))]
+//! # fn main() {}
+//! ```
+//!
+//! ## Streaming Large Files
+//!
+//! ```no_run
+//! # #[cfg(all(feature = "telegram", feature = "streaming"))]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::parser::{Parser, Platform, create_streaming_parser};
+//!
+//! let parser = create_streaming_parser(Platform::Telegram);
+//! for result in parser.stream("large_export.json".as_ref())? {
+//!     let msg = result?;
+//!     // Process one message at a time
+//! }
+//! # Ok(())
+//! # }
+//! # #[cfg(not(all(feature = "telegram", feature = "streaming")))]
 //! # fn main() {}
 //! ```
 
