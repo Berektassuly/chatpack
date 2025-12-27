@@ -1,10 +1,6 @@
-//! Core data models for chat messages.
+//! Core data models for chat output configuration.
 //!
-//! This module provides the [`InternalMessage`] type alias (which is deprecated)
-//! and the [`OutputConfig`] type for configuring output generation.
-//!
-//! **Note**: [`InternalMessage`] is now a deprecated alias for [`crate::Message`].
-//! New code should use [`crate::Message`] directly.
+//! This module provides the [`OutputConfig`] type for configuring output generation.
 //!
 //! # Example
 //!
@@ -13,7 +9,7 @@
 //! use chatpack::core::models::OutputConfig;
 //! use chrono::Utc;
 //!
-//! // Create a simple message (new way)
+//! // Create a simple message
 //! let msg = Message::new("Alice", "Hello, world!");
 //!
 //! // Create with builder pattern
@@ -28,13 +24,6 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-
-// Re-export Message as InternalMessage for backward compatibility
-#[deprecated(
-    since = "0.5.0",
-    note = "Use `chatpack::Message` instead. InternalMessage will be removed in v1.0.0"
-)]
-pub use crate::message::Message as InternalMessage;
 
 /// Configuration for output format.
 ///

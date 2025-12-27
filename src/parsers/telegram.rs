@@ -3,14 +3,11 @@
 use std::fs;
 use std::path::Path;
 
-use chrono::DateTime;
-use serde::Deserialize;
-use serde_json::Value;
-
 use crate::Message;
 use crate::config::TelegramConfig;
 use crate::error::ChatpackError;
 use crate::parser::{Parser, Platform};
+use crate::parsing::telegram::{TelegramExport, parse_telegram_message};
 
 #[cfg(feature = "streaming")]
 use crate::streaming::{StreamingConfig, StreamingParser, TelegramStreamingParser};
@@ -79,44 +76,11 @@ impl TelegramParser {
     fn parse_content(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let export: TelegramExport = serde_json::from_str(content)?;
 
+        // Use shared parsing logic
         let messages = export
             .messages
             .iter()
-            .filter(|msg| msg.msg_type == "message")
-            .filter_map(|msg| {
-                let sender = msg.from.as_ref()?;
-                let text_value = msg.text.as_ref()?;
-                let msg_content = extract_text(text_value);
-
-                if msg_content.trim().is_empty() {
-                    return None;
-                }
-
-                // Parse timestamp
-                let timestamp = msg.date_unixtime.as_ref().and_then(|ts_str| {
-                    ts_str
-                        .parse::<i64>()
-                        .ok()
-                        .and_then(|ts| DateTime::from_timestamp(ts, 0))
-                });
-
-                // Parse edited timestamp
-                let edited = msg.edited_unixtime.as_ref().and_then(|ts_str| {
-                    ts_str
-                        .parse::<i64>()
-                        .ok()
-                        .and_then(|ts| DateTime::from_timestamp(ts, 0))
-                });
-
-                Some(Message::with_metadata(
-                    sender,
-                    msg_content,
-                    timestamp,
-                    msg.id,
-                    msg.reply_to_message_id,
-                    edited,
-                ))
-            })
+            .filter_map(parse_telegram_message)
             .collect();
 
         Ok(messages)
@@ -127,32 +91,6 @@ impl Default for TelegramParser {
     fn default() -> Self {
         Self::new()
     }
-}
-
-// Internal structures for deserializing Telegram JSON
-
-#[derive(Debug, Deserialize)]
-struct TelegramExport {
-    messages: Vec<TelegramMessage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TelegramMessage {
-    /// Message ID
-    id: Option<u64>,
-    /// Message type (we only care about "message")
-    #[serde(rename = "type")]
-    msg_type: String,
-    /// Unix timestamp as string
-    date_unixtime: Option<String>,
-    /// Sender name
-    from: Option<String>,
-    /// Message text (can be string or array)
-    text: Option<Value>,
-    /// Reply reference
-    reply_to_message_id: Option<u64>,
-    /// Edit timestamp as string (if message was edited)
-    edited_unixtime: Option<String>,
 }
 
 // Implement the new unified Parser trait
@@ -212,38 +150,16 @@ impl Parser for TelegramParser {
     }
 }
 
-/// Extracts text content from Telegram's `text` field.
-///
-/// The field can be:
-/// - A simple string: `"Hello"`
-/// - An array with strings and objects: `["Text", {"type": "link", "text": "url"}]`
-fn extract_text(text_value: &Value) -> String {
-    match text_value {
-        Value::String(s) => s.clone(),
-        Value::Array(arr) => arr
-            .iter()
-            .filter_map(|item| match item {
-                Value::String(s) => Some(s.clone()),
-                Value::Object(obj) => obj
-                    .get("text")
-                    .and_then(|v| v.as_str())
-                    .map(ToString::to_string),
-                _ => None,
-            })
-            .collect::<String>(),
-        _ => String::new(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parsing::telegram::extract_telegram_text;
     use serde_json::json;
 
     #[test]
     fn test_extract_text_string() {
         let value = json!("Hello world");
-        assert_eq!(extract_text(&value), "Hello world");
+        assert_eq!(extract_telegram_text(&value), "Hello world");
     }
 
     #[test]
@@ -254,7 +170,7 @@ mod tests {
             " cool!"
         ]);
         assert_eq!(
-            extract_text(&value),
+            extract_telegram_text(&value),
             "Check this: https://example.com cool!"
         );
     }
@@ -262,7 +178,7 @@ mod tests {
     #[test]
     fn test_extract_text_empty() {
         let value = json!(null);
-        assert_eq!(extract_text(&value), "");
+        assert_eq!(extract_telegram_text(&value), "");
     }
 
     #[test]
