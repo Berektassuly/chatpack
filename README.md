@@ -34,14 +34,14 @@ Chatpack parses chat exports from Telegram, WhatsApp, Instagram, and Discord, co
 
 Raw chat exports waste 80%+ of tokens on JSON structure, metadata, and formatting. Chatpack removes this noise, achieving **13x compression** (92% token reduction) with CSV output.
 
-
+```
 ┌─────────────────┐                   ┌─────────────────┐
-│ Telegram JSON   │                   │     Clean CSV   │
-│ WhatsApp TXT    │ ──▶ chatpack ──▶ │ 13x fewer tokens│
+│ Telegram JSON   │                   │ Clean CSV       │
+│ WhatsApp TXT    │ ──▶ chatpack ──▶ │ 13x compression │
 │ Instagram JSON  │                   │ LLM-ready       │
 │ Discord Export  │                   │ RAG-optimized   │
 └─────────────────┘                   └─────────────────┘
-
+```
 
 ### Token Compression Results
 
