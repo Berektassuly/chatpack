@@ -11,8 +11,6 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
 use serde::Deserialize;
 
-#[allow(deprecated)]
-use super::ChatParser;
 use crate::Message;
 use crate::config::DiscordConfig;
 use crate::error::ChatpackError;
@@ -500,22 +498,6 @@ impl Parser for DiscordParser {
     #[cfg(feature = "streaming")]
     fn recommended_buffer_size(&self) -> usize {
         self.config.buffer_size
-    }
-}
-
-// Keep backward compatibility with ChatParser trait
-#[allow(deprecated)]
-impl ChatParser for DiscordParser {
-    fn name(&self) -> &'static str {
-        "Discord"
-    }
-
-    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
-        self.parse_file_internal(file_path)
-    }
-
-    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
-        self.parse_content(content)
     }
 }
 

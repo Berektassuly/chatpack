@@ -121,20 +121,6 @@ pub fn create_streaming_parser(platform: Platform) -> Box<dyn StreamingParser> {
     }
 }
 
-/// Creates a streaming parser for the specified source (legacy API).
-///
-/// **Deprecated:** Use [`create_streaming_parser`] with [`Platform`] instead.
-#[cfg(feature = "cli")]
-#[deprecated(
-    since = "0.5.0",
-    note = "Use `create_streaming_parser` with Platform instead"
-)]
-pub fn create_streaming_parser_from_source(
-    source: crate::cli::Source,
-) -> Option<Box<dyn StreamingParser>> {
-    Some(create_streaming_parser(Platform::from(source)))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

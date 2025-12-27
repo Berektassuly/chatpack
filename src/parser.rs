@@ -157,19 +157,6 @@ impl std::str::FromStr for Platform {
     }
 }
 
-// Conversion from CLI Source to Platform (only with cli feature)
-#[cfg(feature = "cli")]
-impl From<crate::cli::Source> for Platform {
-    fn from(source: crate::cli::Source) -> Self {
-        match source {
-            crate::cli::Source::Telegram => Platform::Telegram,
-            crate::cli::Source::WhatsApp => Platform::WhatsApp,
-            crate::cli::Source::Instagram => Platform::Instagram,
-            crate::cli::Source::Discord => Platform::Discord,
-        }
-    }
-}
-
 /// Iterator adapter that wraps StreamingError into ChatpackError.
 #[cfg(feature = "streaming")]
 pub struct ParseIterator {
