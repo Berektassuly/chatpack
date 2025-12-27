@@ -187,6 +187,10 @@ pub fn parse_discord_stream_message(msg: &DiscordStreamMessage) -> Option<Messag
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // parse_discord_message tests
+    // =========================================================================
+
     #[test]
     fn test_parse_discord_message_basic() {
         let msg = DiscordRawMessage {
@@ -259,6 +263,79 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_discord_message_with_stickers() {
+        let msg = DiscordRawMessage {
+            id: "123".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: "Look at this sticker".to_string(),
+            author: DiscordAuthor {
+                name: "charlie".to_string(),
+                nickname: None,
+            },
+            reference: None,
+            attachments: None,
+            stickers: Some(vec![DiscordSticker {
+                name: "CoolSticker".to_string(),
+            }]),
+        };
+
+        let result = parse_discord_message(&msg);
+        assert!(result.is_some());
+
+        let parsed = result.unwrap();
+        assert!(parsed.content.contains("[Sticker: CoolSticker]"));
+    }
+
+    #[test]
+    fn test_parse_discord_message_sticker_only() {
+        // Empty content but with sticker should be kept
+        let msg = DiscordRawMessage {
+            id: "123".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: String::new(),
+            author: DiscordAuthor {
+                name: "charlie".to_string(),
+                nickname: None,
+            },
+            reference: None,
+            attachments: None,
+            stickers: Some(vec![DiscordSticker {
+                name: "Reaction".to_string(),
+            }]),
+        };
+
+        let result = parse_discord_message(&msg);
+        assert!(result.is_some());
+        assert!(result.unwrap().content.contains("[Sticker: Reaction]"));
+    }
+
+    #[test]
+    fn test_parse_discord_message_attachment_only() {
+        // Empty content but with attachment should be kept
+        let msg = DiscordRawMessage {
+            id: "123".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: String::new(),
+            author: DiscordAuthor {
+                name: "bob".to_string(),
+                nickname: None,
+            },
+            reference: None,
+            attachments: Some(vec![DiscordAttachment {
+                file_name: "photo.jpg".to_string(),
+            }]),
+            stickers: None,
+        };
+
+        let result = parse_discord_message(&msg);
+        assert!(result.is_some());
+        assert!(result.unwrap().content.contains("[Attachment: photo.jpg]"));
+    }
+
+    #[test]
     fn test_parse_discord_message_empty() {
         let msg = DiscordRawMessage {
             id: "123".to_string(),
@@ -275,5 +352,241 @@ mod tests {
         };
 
         assert!(parse_discord_message(&msg).is_none());
+    }
+
+    #[test]
+    fn test_parse_discord_message_with_reply() {
+        let msg = DiscordRawMessage {
+            id: "456".to_string(),
+            timestamp: "2024-01-15T10:31:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: "This is a reply".to_string(),
+            author: DiscordAuthor {
+                name: "alice".to_string(),
+                nickname: None,
+            },
+            reference: Some(DiscordReference {
+                message_id: Some("123".to_string()),
+            }),
+            attachments: None,
+            stickers: None,
+        };
+
+        let result = parse_discord_message(&msg);
+        assert!(result.is_some());
+
+        let parsed = result.unwrap();
+        assert_eq!(parsed.reply_to, Some(123));
+    }
+
+    #[test]
+    fn test_parse_discord_message_with_edited() {
+        let msg = DiscordRawMessage {
+            id: "123".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: Some("2024-01-15T10:35:00+00:00".to_string()),
+            content: "Edited message".to_string(),
+            author: DiscordAuthor {
+                name: "alice".to_string(),
+                nickname: None,
+            },
+            reference: None,
+            attachments: None,
+            stickers: None,
+        };
+
+        let result = parse_discord_message(&msg);
+        assert!(result.is_some());
+
+        let parsed = result.unwrap();
+        assert!(parsed.edited.is_some());
+    }
+
+    // =========================================================================
+    // parse_discord_stream_message tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_stream_message_basic() {
+        let msg = DiscordStreamMessage {
+            id: "123456789".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: "Hello from stream".to_string(),
+            author: DiscordAuthor {
+                name: "alice".to_string(),
+                nickname: None,
+            },
+            reference: None,
+        };
+
+        let result = parse_discord_stream_message(&msg);
+        assert!(result.is_some());
+
+        let parsed = result.unwrap();
+        assert_eq!(parsed.sender, "alice");
+        assert_eq!(parsed.content, "Hello from stream");
+        assert!(parsed.timestamp.is_some());
+        assert_eq!(parsed.id, Some(123456789));
+    }
+
+    #[test]
+    fn test_parse_stream_message_with_nickname() {
+        let msg = DiscordStreamMessage {
+            id: "123".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: "Hi".to_string(),
+            author: DiscordAuthor {
+                name: "alice123".to_string(),
+                nickname: Some("Alice Display".to_string()),
+            },
+            reference: None,
+        };
+
+        let result = parse_discord_stream_message(&msg);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().sender, "Alice Display");
+    }
+
+    #[test]
+    fn test_parse_stream_message_empty() {
+        let msg = DiscordStreamMessage {
+            id: "123".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: "   ".to_string(), // Whitespace only
+            author: DiscordAuthor {
+                name: "bob".to_string(),
+                nickname: None,
+            },
+            reference: None,
+        };
+
+        assert!(parse_discord_stream_message(&msg).is_none());
+    }
+
+    #[test]
+    fn test_parse_stream_message_with_reply() {
+        let msg = DiscordStreamMessage {
+            id: "456".to_string(),
+            timestamp: "2024-01-15T10:31:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: "Reply to something".to_string(),
+            author: DiscordAuthor {
+                name: "charlie".to_string(),
+                nickname: None,
+            },
+            reference: Some(DiscordReference {
+                message_id: Some("789".to_string()),
+            }),
+        };
+
+        let result = parse_discord_stream_message(&msg);
+        assert!(result.is_some());
+
+        let parsed = result.unwrap();
+        assert_eq!(parsed.reply_to, Some(789));
+    }
+
+    #[test]
+    fn test_parse_stream_message_with_edited() {
+        let msg = DiscordStreamMessage {
+            id: "123".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: Some("2024-01-15T10:40:00+00:00".to_string()),
+            content: "Edited stream message".to_string(),
+            author: DiscordAuthor {
+                name: "alice".to_string(),
+                nickname: None,
+            },
+            reference: None,
+        };
+
+        let result = parse_discord_stream_message(&msg);
+        assert!(result.is_some());
+
+        let parsed = result.unwrap();
+        assert!(parsed.edited.is_some());
+    }
+
+    #[test]
+    fn test_parse_stream_message_invalid_id() {
+        let msg = DiscordStreamMessage {
+            id: "not_a_number".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: "Has invalid ID".to_string(),
+            author: DiscordAuthor {
+                name: "alice".to_string(),
+                nickname: None,
+            },
+            reference: None,
+        };
+
+        let result = parse_discord_stream_message(&msg);
+        assert!(result.is_some());
+
+        let parsed = result.unwrap();
+        assert!(parsed.id.is_none()); // Should be None since parsing fails
+    }
+
+    #[test]
+    fn test_parse_stream_message_reference_without_id() {
+        let msg = DiscordStreamMessage {
+            id: "123".to_string(),
+            timestamp: "2024-01-15T10:30:00+00:00".to_string(),
+            timestamp_edited: None,
+            content: "Has reference but no id".to_string(),
+            author: DiscordAuthor {
+                name: "alice".to_string(),
+                nickname: None,
+            },
+            reference: Some(DiscordReference { message_id: None }),
+        };
+
+        let result = parse_discord_stream_message(&msg);
+        assert!(result.is_some());
+
+        let parsed = result.unwrap();
+        assert!(parsed.reply_to.is_none());
+    }
+
+    // =========================================================================
+    // Serde deserialization tests
+    // =========================================================================
+
+    #[test]
+    fn test_discord_export_deserialize() {
+        let json = r#"{
+            "messages": [
+                {
+                    "id": "1",
+                    "timestamp": "2024-01-15T10:30:00+00:00",
+                    "content": "Hello",
+                    "author": {"name": "alice"}
+                }
+            ]
+        }"#;
+
+        let export: DiscordExport = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(export.messages.len(), 1);
+        assert_eq!(export.messages[0].content, "Hello");
+    }
+
+    #[test]
+    fn test_discord_stream_message_deserialize() {
+        let json = r#"{
+            "id": "12345",
+            "timestamp": "2024-01-15T10:30:00+00:00",
+            "content": "Stream test",
+            "author": {"name": "bob", "nickname": "Bobby"}
+        }"#;
+
+        let msg: DiscordStreamMessage = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(msg.id, "12345");
+        assert_eq!(msg.content, "Stream test");
+        assert_eq!(msg.author.name, "bob");
+        assert_eq!(msg.author.nickname, Some("Bobby".to_string()));
     }
 }

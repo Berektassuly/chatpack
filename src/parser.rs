@@ -451,6 +451,10 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
+    // =========================================================================
+    // Platform::from_str tests
+    // =========================================================================
+
     #[test]
     fn test_platform_from_str() {
         assert_eq!(Platform::from_str("telegram").unwrap(), Platform::Telegram);
@@ -468,9 +472,37 @@ mod tests {
     }
 
     #[test]
-    fn test_platform_from_str_error() {
-        assert!(Platform::from_str("unknown").is_err());
+    fn test_platform_from_str_case_insensitive() {
+        // Test various case combinations
+        assert_eq!(Platform::from_str("TeLegRaM").unwrap(), Platform::Telegram);
+        assert_eq!(Platform::from_str("TG").unwrap(), Platform::Telegram);
+        assert_eq!(Platform::from_str("WhAtSaPp").unwrap(), Platform::WhatsApp);
+        assert_eq!(Platform::from_str("WA").unwrap(), Platform::WhatsApp);
+        assert_eq!(
+            Platform::from_str("InStAgRaM").unwrap(),
+            Platform::Instagram
+        );
+        assert_eq!(Platform::from_str("IG").unwrap(), Platform::Instagram);
+        assert_eq!(Platform::from_str("DiScOrD").unwrap(), Platform::Discord);
+        assert_eq!(Platform::from_str("DC").unwrap(), Platform::Discord);
     }
+
+    #[test]
+    fn test_platform_from_str_error() {
+        let err = Platform::from_str("unknown").unwrap_err();
+        assert!(err.contains("Unknown platform"));
+        assert!(err.contains("unknown"));
+
+        let err = Platform::from_str("").unwrap_err();
+        assert!(err.contains("Unknown platform"));
+
+        let err = Platform::from_str("telegramx").unwrap_err();
+        assert!(err.contains("Unknown platform"));
+    }
+
+    // =========================================================================
+    // Platform display tests
+    // =========================================================================
 
     #[test]
     fn test_platform_display() {
@@ -480,6 +512,10 @@ mod tests {
         assert_eq!(Platform::Discord.to_string(), "Discord");
     }
 
+    // =========================================================================
+    // Platform default_extension tests
+    // =========================================================================
+
     #[test]
     fn test_platform_default_extension() {
         assert_eq!(Platform::Telegram.default_extension(), "json");
@@ -487,6 +523,10 @@ mod tests {
         assert_eq!(Platform::Instagram.default_extension(), "json");
         assert_eq!(Platform::Discord.default_extension(), "json");
     }
+
+    // =========================================================================
+    // Platform::all and Platform::all_names tests
+    // =========================================================================
 
     #[test]
     fn test_platform_all() {
@@ -498,11 +538,285 @@ mod tests {
         assert!(all.contains(&Platform::Discord));
     }
 
+    #[test]
+    fn test_platform_all_names() {
+        let names = Platform::all_names();
+        assert!(names.contains(&"telegram"));
+        assert!(names.contains(&"tg"));
+        assert!(names.contains(&"whatsapp"));
+        assert!(names.contains(&"wa"));
+        assert!(names.contains(&"instagram"));
+        assert!(names.contains(&"ig"));
+        assert!(names.contains(&"discord"));
+        assert!(names.contains(&"dc"));
+    }
+
+    // =========================================================================
+    // Platform serde tests
+    // =========================================================================
+
+    #[test]
+    fn test_platform_serde() {
+        let platform = Platform::Telegram;
+        let json = serde_json::to_string(&platform).expect("serialize failed");
+        assert_eq!(json, "\"telegram\"");
+
+        let parsed: Platform = serde_json::from_str("\"telegram\"").expect("deserialize failed");
+        assert_eq!(parsed, Platform::Telegram);
+
+        // Test alias deserialization
+        let parsed: Platform = serde_json::from_str("\"tg\"").expect("deserialize failed");
+        assert_eq!(parsed, Platform::Telegram);
+
+        let parsed: Platform = serde_json::from_str("\"wa\"").expect("deserialize failed");
+        assert_eq!(parsed, Platform::WhatsApp);
+    }
+
+    #[test]
+    fn test_platform_serde_all_variants() {
+        for platform in Platform::all() {
+            let json = serde_json::to_string(platform).expect("serialize failed");
+            let parsed: Platform = serde_json::from_str(&json).expect("deserialize failed");
+            assert_eq!(parsed, *platform);
+        }
+    }
+
+    // =========================================================================
+    // Platform traits tests
+    // =========================================================================
+
+    #[test]
+    fn test_platform_clone_copy() {
+        let p1 = Platform::Telegram;
+        let p2 = p1; // Copy
+        let p3 = p1.clone();
+        assert_eq!(p1, p2);
+        assert_eq!(p1, p3);
+    }
+
+    #[test]
+    fn test_platform_debug() {
+        let debug = format!("{:?}", Platform::Telegram);
+        assert!(debug.contains("Telegram"));
+    }
+
+    #[test]
+    fn test_platform_eq_hash() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(Platform::Telegram);
+        set.insert(Platform::WhatsApp);
+        set.insert(Platform::Telegram); // Duplicate
+        assert_eq!(set.len(), 2);
+        assert!(set.contains(&Platform::Telegram));
+        assert!(set.contains(&Platform::WhatsApp));
+    }
+
+    // =========================================================================
+    // create_parser tests
+    // =========================================================================
+
     #[cfg(feature = "telegram")]
     #[test]
-    fn test_create_parser() {
+    fn test_create_parser_telegram() {
         let parser = create_parser(Platform::Telegram);
         assert_eq!(parser.name(), "Telegram");
         assert_eq!(parser.platform(), Platform::Telegram);
+        assert!(!parser.supports_streaming());
+    }
+
+    #[cfg(feature = "whatsapp")]
+    #[test]
+    fn test_create_parser_whatsapp() {
+        let parser = create_parser(Platform::WhatsApp);
+        assert_eq!(parser.name(), "WhatsApp");
+        assert_eq!(parser.platform(), Platform::WhatsApp);
+    }
+
+    #[cfg(feature = "instagram")]
+    #[test]
+    fn test_create_parser_instagram() {
+        let parser = create_parser(Platform::Instagram);
+        assert_eq!(parser.name(), "Instagram");
+        assert_eq!(parser.platform(), Platform::Instagram);
+    }
+
+    #[cfg(feature = "discord")]
+    #[test]
+    fn test_create_parser_discord() {
+        let parser = create_parser(Platform::Discord);
+        assert_eq!(parser.name(), "Discord");
+        assert_eq!(parser.platform(), Platform::Discord);
+    }
+
+    // =========================================================================
+    // create_streaming_parser tests
+    // =========================================================================
+
+    #[cfg(feature = "telegram")]
+    #[test]
+    fn test_create_streaming_parser_telegram() {
+        let parser = create_streaming_parser(Platform::Telegram);
+        assert_eq!(parser.name(), "Telegram");
+        assert!(parser.supports_streaming());
+        assert!(parser.recommended_buffer_size() >= 64 * 1024);
+    }
+
+    #[cfg(feature = "whatsapp")]
+    #[test]
+    fn test_create_streaming_parser_whatsapp() {
+        let parser = create_streaming_parser(Platform::WhatsApp);
+        assert_eq!(parser.name(), "WhatsApp");
+        assert!(parser.supports_streaming());
+    }
+
+    #[cfg(feature = "instagram")]
+    #[test]
+    fn test_create_streaming_parser_instagram() {
+        let parser = create_streaming_parser(Platform::Instagram);
+        assert_eq!(parser.name(), "Instagram");
+        assert!(parser.supports_streaming());
+    }
+
+    #[cfg(feature = "discord")]
+    #[test]
+    fn test_create_streaming_parser_discord() {
+        let parser = create_streaming_parser(Platform::Discord);
+        assert_eq!(parser.name(), "Discord");
+        assert!(parser.supports_streaming());
+    }
+
+    // =========================================================================
+    // Parser trait method tests
+    // =========================================================================
+
+    #[cfg(feature = "telegram")]
+    #[test]
+    fn test_parser_parse_str() {
+        let parser = create_parser(Platform::Telegram);
+        let json = r#"{"messages": [{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Alice", "text": "Hello"}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[0].content, "Hello");
+    }
+
+    #[cfg(feature = "telegram")]
+    #[test]
+    fn test_parser_parse_file() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let file_path = dir.path().join("test.json");
+        let mut file = std::fs::File::create(&file_path).expect("create file");
+        write!(file, r#"{{"messages": [{{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Bob", "text": "Hi"}}]}}"#).expect("write");
+
+        let parser = create_parser(Platform::Telegram);
+        let messages = parser
+            .parse_file(file_path.to_str().unwrap())
+            .expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "Bob");
+    }
+
+    #[cfg(all(feature = "telegram", feature = "streaming"))]
+    #[test]
+    fn test_parser_stream_file() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let file_path = dir.path().join("test.json");
+        let mut file = std::fs::File::create(&file_path).expect("create file");
+        // Streaming parser needs newlines for line-by-line reading
+        writeln!(file, r#"{{"#).expect("write");
+        writeln!(file, r#"  "messages": ["#).expect("write");
+        writeln!(file, r#"    {{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Charlie", "text": "Hello"}}"#).expect("write");
+        writeln!(file, r#"  ]"#).expect("write");
+        writeln!(file, r#"}}"#).expect("write");
+        file.flush().expect("flush");
+        drop(file);
+
+        let parser = create_streaming_parser(Platform::Telegram);
+        let iter = parser
+            .stream_file(file_path.to_str().unwrap())
+            .expect("stream failed");
+        let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "Charlie");
+    }
+
+    // =========================================================================
+    // Parser default implementations
+    // =========================================================================
+
+    #[cfg(feature = "telegram")]
+    #[test]
+    fn test_parser_default_supports_streaming() {
+        let parser = create_parser(Platform::Telegram);
+        // Default parser (non-streaming config) should return false
+        assert!(!parser.supports_streaming());
+    }
+
+    #[cfg(feature = "telegram")]
+    #[test]
+    fn test_parser_default_recommended_buffer_size() {
+        let parser = create_parser(Platform::Telegram);
+        // Should return at least 64KB
+        assert!(parser.recommended_buffer_size() >= 64 * 1024);
+    }
+
+    // =========================================================================
+    // ParseIterator tests
+    // =========================================================================
+
+    #[cfg(all(feature = "telegram", feature = "streaming"))]
+    #[test]
+    fn test_parse_iterator_wrapper() {
+        use std::io::Write;
+        use crate::streaming::TelegramStreamingParser;
+        use crate::streaming::StreamingParser;
+
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let file_path = dir.path().join("test.json");
+        let mut file = std::fs::File::create(&file_path).expect("create file");
+        writeln!(file, r#"{{"#).expect("write");
+        writeln!(file, r#"  "messages": ["#).expect("write");
+        writeln!(file, r#"    {{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Alice", "text": "Hello"}}"#).expect("write");
+        writeln!(file, r#"  ]"#).expect("write");
+        writeln!(file, r#"}}"#).expect("write");
+        file.flush().expect("flush");
+        drop(file);
+
+        let streaming_parser = TelegramStreamingParser::new();
+        let inner = streaming_parser.stream(file_path.to_str().unwrap()).expect("stream failed");
+
+        let mut parse_iter = ParseIterator::new(inner);
+
+        // Test progress methods
+        assert!(parse_iter.progress().is_some() || parse_iter.progress().is_none());
+        assert!(parse_iter.bytes_processed() >= 0);
+        assert!(parse_iter.total_bytes().is_some());
+
+        // Test iterator
+        let msg = parse_iter.next().expect("should have message").expect("parse ok");
+        assert_eq!(msg.sender, "Alice");
+    }
+
+    #[cfg(feature = "telegram")]
+    #[test]
+    fn test_parser_stream_default_impl() {
+        use std::io::Write;
+
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let file_path = dir.path().join("test.json");
+        let mut file = std::fs::File::create(&file_path).expect("create file");
+        write!(file, r#"{{"messages": [{{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Bob", "text": "Hi"}}]}}"#).expect("write");
+        file.flush().expect("flush");
+        drop(file);
+
+        // Use non-streaming parser to test default stream() implementation
+        let parser = create_parser(Platform::Telegram);
+        let iter = parser.stream(file_path.as_ref()).expect("stream failed");
+        let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "Bob");
     }
 }

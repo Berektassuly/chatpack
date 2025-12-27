@@ -295,6 +295,42 @@ This is a continuation line
             .to_string()
     }
 
+    // =========================================================================
+    // Constructor tests
+    // =========================================================================
+
+    #[test]
+    fn test_parser_new() {
+        let parser = WhatsAppStreamingParser::new();
+        assert_eq!(parser.name(), "WhatsApp (Streaming)");
+    }
+
+    #[test]
+    fn test_parser_default() {
+        let parser = WhatsAppStreamingParser::default();
+        assert_eq!(parser.name(), "WhatsApp (Streaming)");
+    }
+
+    #[test]
+    fn test_parser_with_config() {
+        let config = StreamingConfig::default()
+            .with_buffer_size(512 * 1024)
+            .with_max_message_size(2 * 1024 * 1024)
+            .with_skip_invalid(true);
+        let parser = WhatsAppStreamingParser::with_config(config);
+        assert_eq!(parser.name(), "WhatsApp (Streaming)");
+    }
+
+    #[test]
+    fn test_recommended_buffer_size() {
+        let parser = WhatsAppStreamingParser::new();
+        assert!(parser.recommended_buffer_size() > 0);
+    }
+
+    // =========================================================================
+    // Basic parsing tests
+    // =========================================================================
+
     #[test]
     fn test_streaming_parser_us_format() {
         let txt = create_test_us_format();
@@ -331,6 +367,24 @@ This is a continuation line
     }
 
     #[test]
+    fn test_empty_file() {
+        let txt = "";
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            WhatsAppMessageIterator::new(reader, txt.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.filter_map(Result::ok).collect();
+        assert!(messages.is_empty());
+    }
+
+    // =========================================================================
+    // Progress and iterator trait tests
+    // =========================================================================
+
+    #[test]
     fn test_progress_reporting() {
         let txt = create_test_us_format();
         let cursor = Cursor::new(txt.as_bytes().to_vec());
@@ -345,6 +399,56 @@ This is a continuation line
         let progress = iterator.progress().unwrap();
         assert!(progress > 90.0);
     }
+
+    #[test]
+    fn test_progress_with_zero_file_size() {
+        let txt = create_test_us_format();
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            WhatsAppMessageIterator::new(reader, 0, StreamingConfig::default()).unwrap();
+
+        assert!(iterator.progress().is_none());
+    }
+
+    #[test]
+    fn test_bytes_processed() {
+        let txt = create_test_us_format();
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let mut iterator =
+            WhatsAppMessageIterator::new(reader, txt.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        // Sample lines already read
+        let initial_bytes = iterator.bytes_processed();
+        assert!(initial_bytes > 0);
+
+        // Consume all messages
+        let _: Vec<_> = iterator.by_ref().collect();
+
+        let final_bytes = iterator.bytes_processed();
+        assert!(final_bytes >= initial_bytes);
+    }
+
+    #[test]
+    fn test_total_bytes() {
+        let txt = create_test_us_format();
+        let file_size = txt.len() as u64;
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            WhatsAppMessageIterator::new(reader, file_size, StreamingConfig::default()).unwrap();
+
+        assert_eq!(iterator.total_bytes(), Some(file_size));
+    }
+
+    // =========================================================================
+    // Content tests
+    // =========================================================================
 
     #[test]
     fn test_parser_name() {
@@ -406,5 +510,130 @@ Line 3
         assert!(messages[0].content.contains("Line 1"));
         assert!(messages[0].content.contains("Line 2"));
         assert!(messages[0].content.contains("Line 3"));
+    }
+
+    #[test]
+    fn test_empty_content_skipped() {
+        let txt = "[1/15/24, 10:30:00 AM] Alice:
+[1/15/24, 10:31:00 AM] Bob: Real message";
+
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            WhatsAppMessageIterator::new(reader, txt.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.filter_map(Result::ok).collect();
+
+        // Empty content message should be skipped
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "Bob");
+    }
+
+    #[test]
+    fn test_unrecognized_format_returns_empty() {
+        let txt = "This is not a WhatsApp export format
+Just random lines
+With no pattern";
+
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            WhatsAppMessageIterator::new(reader, txt.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.filter_map(Result::ok).collect();
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn test_pending_message_helpers() {
+        let pending = PendingMessage::default();
+        assert!(pending.is_empty());
+
+        let with_content = PendingMessage {
+            sender: "Alice".to_string(),
+            content: "Hello".to_string(),
+            timestamp: None,
+        };
+        assert!(!with_content.is_empty());
+
+        // Test into_message
+        let msg = with_content.into_message();
+        assert!(msg.is_some());
+        let msg = msg.unwrap();
+        assert_eq!(msg.sender, "Alice");
+        assert_eq!(msg.content, "Hello");
+    }
+
+    #[test]
+    fn test_pending_message_take() {
+        let mut pending = PendingMessage {
+            sender: "Alice".to_string(),
+            content: "Hello".to_string(),
+            timestamp: None,
+        };
+
+        let taken = pending.take();
+        assert!(!taken.is_empty());
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn test_system_messages_filtered() {
+        let txt = "[1/15/24, 10:30:00 AM] Alice: Hello
+[1/15/24, 10:31:00 AM] System: created this group
+[1/15/24, 10:32:00 AM] Bob: Hi there";
+
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            WhatsAppMessageIterator::new(reader, txt.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.filter_map(Result::ok).collect();
+
+        // System message should be filtered
+        assert!(messages.iter().all(|m| m.sender != "System"));
+    }
+
+    #[test]
+    fn test_empty_lines_between_messages() {
+        let txt = "[1/15/24, 10:30:00 AM] Alice: Hello
+
+[1/15/24, 10:31:00 AM] Bob: Hi";
+
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            WhatsAppMessageIterator::new(reader, txt.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.filter_map(Result::ok).collect();
+
+        assert_eq!(messages.len(), 2);
+    }
+
+    #[test]
+    fn test_iterator_returns_none_when_finished() {
+        let txt = "[1/15/24, 10:30:00 AM] Alice: Hello";
+
+        let cursor = Cursor::new(txt.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let mut iterator =
+            WhatsAppMessageIterator::new(reader, txt.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        // Consume all messages
+        let _: Vec<_> = iterator.by_ref().collect();
+
+        // Additional calls should return None
+        assert!(iterator.next().is_none());
+        assert!(iterator.next().is_none());
     }
 }

@@ -205,11 +205,181 @@ mod tests {
     use super::*;
     use crate::parsing::whatsapp::DateFormat;
 
+    // =========================================================================
+    // WhatsAppParser construction tests
+    // =========================================================================
+
     #[test]
     fn test_parser_name() {
         let parser = WhatsAppParser::new();
         assert_eq!(Parser::name(&parser), "WhatsApp");
     }
+
+    #[test]
+    fn test_parser_platform() {
+        let parser = WhatsAppParser::new();
+        assert_eq!(parser.platform(), Platform::WhatsApp);
+    }
+
+    #[test]
+    fn test_parser_default() {
+        let parser = WhatsAppParser::default();
+        assert!(!parser.config().streaming);
+        assert!(parser.config().skip_system_messages);
+    }
+
+    #[test]
+    fn test_parser_with_config() {
+        let config = WhatsAppConfig::new()
+            .with_streaming(true)
+            .with_skip_system_messages(false);
+        let parser = WhatsAppParser::with_config(config);
+        assert!(parser.config().streaming);
+        assert!(!parser.config().skip_system_messages);
+    }
+
+    #[test]
+    fn test_parser_with_streaming() {
+        let parser = WhatsAppParser::with_streaming();
+        assert!(parser.config().streaming);
+    }
+
+    // =========================================================================
+    // parse_str tests - US format
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_us_format() {
+        let parser = WhatsAppParser::new();
+        let content = "[1/15/24, 10:30:45 AM] Alice: Hello\n[1/15/24, 10:31:00 AM] Bob: Hi there";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[0].content, "Hello");
+        assert_eq!(messages[1].sender, "Bob");
+        assert_eq!(messages[1].content, "Hi there");
+    }
+
+    // =========================================================================
+    // parse_str tests - EU dot bracketed format
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_eu_dot_bracketed() {
+        let parser = WhatsAppParser::new();
+        let content = "[15.01.24, 10:30:45] Alice: Hello\n[15.01.24, 10:31:00] Bob: Hi";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[1].sender, "Bob");
+    }
+
+    // =========================================================================
+    // parse_str tests - EU dot no bracket format
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_eu_dot_no_bracket() {
+        let parser = WhatsAppParser::new();
+        let content = "26.10.2025, 20:40 - Alice: Hello\n26.10.2025, 20:41 - Bob: Hi";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[1].sender, "Bob");
+    }
+
+    // =========================================================================
+    // parse_str tests - EU slash format
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_eu_slash() {
+        let parser = WhatsAppParser::new();
+        let content = "15/01/2024, 10:30 - Alice: Hello\n15/01/2024, 10:31 - Bob: Hi";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[1].sender, "Bob");
+    }
+
+    // =========================================================================
+    // parse_str tests - multiline messages
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_multiline() {
+        let parser = WhatsAppParser::new();
+        let content = "[1/15/24, 10:30:45 AM] Alice: Hello\nThis is a second line\n[1/15/24, 10:31:00 AM] Bob: Hi";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].content, "Hello\nThis is a second line");
+        assert_eq!(messages[1].content, "Hi");
+    }
+
+    // =========================================================================
+    // parse_str tests - system messages
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_filters_system_messages() {
+        let parser = WhatsAppParser::new();
+        let content = "[1/15/24, 10:30:45 AM] Alice: Hello\n[1/15/24, 10:30:50 AM] System: Messages and calls are end-to-end encrypted\n[1/15/24, 10:31:00 AM] Bob: Hi";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[1].sender, "Bob");
+    }
+
+    #[test]
+    fn test_parse_str_keeps_system_messages_when_disabled() {
+        let config = WhatsAppConfig::new().with_skip_system_messages(false);
+        let parser = WhatsAppParser::with_config(config);
+        let content = "[1/15/24, 10:30:45 AM] Alice: Hello\n[1/15/24, 10:30:50 AM] System: Messages and calls are end-to-end encrypted\n[1/15/24, 10:31:00 AM] Bob: Hi";
+        let messages = parser.parse_str(content).expect("parse failed");
+        // Now system messages should be kept
+        assert!(messages.len() >= 2);
+    }
+
+    // =========================================================================
+    // parse_str tests - edge cases
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_empty_content() {
+        let parser = WhatsAppParser::new();
+        let content = "";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn test_parse_str_unrecognized_format() {
+        let parser = WhatsAppParser::new();
+        let content = "This is not a valid WhatsApp export";
+        let result = parser.parse_str(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_str_media_omitted_not_filtered() {
+        let parser = WhatsAppParser::new();
+        let content = "[1/15/24, 10:30:45 AM] Alice: <Media omitted>\n[1/15/24, 10:31:00 AM] Bob: Hi";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].content, "<Media omitted>");
+    }
+
+    #[test]
+    fn test_parse_str_skips_empty_lines() {
+        let parser = WhatsAppParser::new();
+        let content = "[1/15/24, 10:30:45 AM] Alice: Hello\n\n\n[1/15/24, 10:31:00 AM] Bob: Hi";
+        let messages = parser.parse_str(content).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+    }
+
+    // =========================================================================
+    // Format detection tests
+    // =========================================================================
 
     #[test]
     fn test_detect_format_us() {
@@ -253,6 +423,10 @@ mod tests {
         assert_eq!(detect_whatsapp_format(&lines), Some(DateFormat::EuSlash));
     }
 
+    // =========================================================================
+    // System message detection tests
+    // =========================================================================
+
     #[test]
     fn test_is_system_message_english() {
         assert!(is_whatsapp_system_message(
@@ -279,6 +453,10 @@ mod tests {
         assert!(!is_whatsapp_system_message("Bob", "<Без медиафайлов>"));
     }
 
+    // =========================================================================
+    // Timestamp parsing tests
+    // =========================================================================
+
     #[test]
     fn test_parse_timestamp_us() {
         let ts = parse_whatsapp_timestamp("1/15/24", "10:30:45 AM", DateFormat::US);
@@ -294,6 +472,10 @@ mod tests {
         assert!(ts2.is_some());
     }
 
+    // =========================================================================
+    // Edge cases for system messages
+    // =========================================================================
+
     #[test]
     fn test_media_not_filtered() {
         // <Media omitted> should NOT be treated as system message
@@ -306,5 +488,33 @@ mod tests {
     fn test_empty_sender_is_system() {
         assert!(is_whatsapp_system_message("", "Some message"));
         assert!(is_whatsapp_system_message("   ", "Some message"));
+    }
+
+    // =========================================================================
+    // Streaming support tests
+    // =========================================================================
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_supports_streaming_false_by_default() {
+        let parser = WhatsAppParser::new();
+        assert!(!parser.supports_streaming());
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_supports_streaming_true_when_enabled() {
+        let parser = WhatsAppParser::with_streaming();
+        assert!(parser.supports_streaming());
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_recommended_buffer_size() {
+        let parser = WhatsAppParser::new();
+        assert_eq!(parser.recommended_buffer_size(), 64 * 1024);
+
+        let streaming_parser = WhatsAppParser::with_streaming();
+        assert_eq!(streaming_parser.recommended_buffer_size(), 256 * 1024);
     }
 }
