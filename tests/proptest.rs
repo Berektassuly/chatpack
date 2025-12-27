@@ -4,10 +4,10 @@
 
 use proptest::prelude::*;
 
-use chatpack::core::{FilterConfig, InternalMessage, apply_filters, merge_consecutive};
+use chatpack::core::{FilterConfig, Message, apply_filters, merge_consecutive};
 
-/// Generate a random InternalMessage using fast strategies (no regex!)
-fn arb_message() -> impl Strategy<Value = InternalMessage> {
+/// Generate a random Message using fast strategies (no regex!)
+fn arb_message() -> impl Strategy<Value = Message> {
     (
         // Fast: select from predefined senders
         prop::sample::select(vec![
@@ -32,7 +32,7 @@ fn arb_message() -> impl Strategy<Value = InternalMessage> {
             "🎉🔥💀 emoji".to_string(),
         ]),
     )
-        .prop_map(|(sender, content)| InternalMessage {
+        .prop_map(|(sender, content)| Message {
             sender,
             content,
             timestamp: None,
@@ -43,7 +43,7 @@ fn arb_message() -> impl Strategy<Value = InternalMessage> {
 }
 
 /// Generate a vector of random messages
-fn arb_messages(max_len: usize) -> impl Strategy<Value = Vec<InternalMessage>> {
+fn arb_messages(max_len: usize) -> impl Strategy<Value = Vec<Message>> {
     prop::collection::vec(arb_message(), 0..max_len)
 }
 
@@ -136,7 +136,7 @@ proptest! {
     /// Messages with special characters don't break merge
     #[test]
     fn special_chars_dont_break_merge(sender in prop::sample::select(vec!["A", "B", "C"])) {
-        let msg = InternalMessage {
+        let msg = Message {
             sender: sender.to_string(),
             content: "test;with\"special\nchars\ttab".to_string(),
             timestamp: None,
@@ -152,7 +152,7 @@ proptest! {
     fn unicode_content_preserved(idx in 0usize..5) {
         let contents = ["Привет", "こんにちは", "مرحبا", "🎉🔥💀", "Mixed Тест 日本"];
         let content = contents[idx].to_string();
-        let msg = InternalMessage {
+        let msg = Message {
             sender: "User".to_string(),
             content: content.clone(),
             timestamp: None,
@@ -176,7 +176,7 @@ mod edge_cases {
     #[test]
     fn merge_consecutive_same_sender() {
         let messages = vec![
-            InternalMessage {
+            Message {
                 sender: "Alice".into(),
                 content: "Hello".into(),
                 timestamp: None,
@@ -184,7 +184,7 @@ mod edge_cases {
                 reply_to: None,
                 edited: None,
             },
-            InternalMessage {
+            Message {
                 sender: "Alice".into(),
                 content: "World".into(),
                 timestamp: None,
@@ -203,7 +203,7 @@ mod edge_cases {
     #[test]
     fn merge_alternating_senders() {
         let messages = vec![
-            InternalMessage {
+            Message {
                 sender: "Alice".into(),
                 content: "Hi".into(),
                 timestamp: None,
@@ -211,7 +211,7 @@ mod edge_cases {
                 reply_to: None,
                 edited: None,
             },
-            InternalMessage {
+            Message {
                 sender: "Bob".into(),
                 content: "Hey".into(),
                 timestamp: None,
@@ -219,7 +219,7 @@ mod edge_cases {
                 reply_to: None,
                 edited: None,
             },
-            InternalMessage {
+            Message {
                 sender: "Alice".into(),
                 content: "Bye".into(),
                 timestamp: None,
@@ -235,7 +235,7 @@ mod edge_cases {
 
     #[test]
     fn filter_empty_messages() {
-        let messages: Vec<InternalMessage> = vec![];
+        let messages: Vec<Message> = vec![];
         let config = FilterConfig::new().with_user("Anyone".into());
         let filtered = apply_filters(messages, &config);
         assert!(filtered.is_empty());
@@ -244,7 +244,7 @@ mod edge_cases {
     #[test]
     fn merge_with_empty_content() {
         let messages = vec![
-            InternalMessage {
+            Message {
                 sender: "Alice".into(),
                 content: String::new(),
                 timestamp: None,
@@ -252,7 +252,7 @@ mod edge_cases {
                 reply_to: None,
                 edited: None,
             },
-            InternalMessage {
+            Message {
                 sender: "Alice".into(),
                 content: "Real message".into(),
                 timestamp: None,

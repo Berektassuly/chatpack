@@ -88,7 +88,7 @@
 //! - [`config`] - Parser configuration types
 //!   - [`TelegramConfig`](config::TelegramConfig), [`WhatsAppConfig`](config::WhatsAppConfig), etc.
 //! - [`core`] - Core types and functionality
-//!   - [`core::models`] - [`InternalMessage`], [`OutputConfig`]
+//!   - [`core::models`] - [`Message`], [`OutputConfig`]
 //!   - [`core::filter`] - [`FilterConfig`], [`apply_filters`]
 //!   - [`core::processor`] - [`merge_consecutive`], [`ProcessingStats`]
 //!   - [`core::output`] - [`write_json`], [`write_jsonl`], [`write_csv`]
@@ -110,6 +110,15 @@ pub mod error;
 pub mod format;
 pub mod message;
 pub mod progress;
+
+// Shared parsing utilities (DRY - used by both parsers and streaming)
+#[cfg(any(
+    feature = "telegram",
+    feature = "whatsapp",
+    feature = "instagram",
+    feature = "discord"
+))]
+pub mod parsing;
 
 // Parser modules - require at least one parser feature
 #[cfg(any(
@@ -139,6 +148,10 @@ pub mod parsers;
     )
 ))]
 pub mod streaming;
+
+// Async parser module (requires async feature and at least one parser)
+#[cfg(all(feature = "async", feature = "telegram"))]
+pub mod async_parser;
 
 // Re-export the main types at the crate root for convenience
 pub use error::{ChatpackError, Result};
@@ -171,7 +184,7 @@ pub mod prelude {
     pub use crate::config::{DiscordConfig, InstagramConfig, TelegramConfig, WhatsAppConfig};
 
     // Models
-    pub use crate::core::models::{InternalMessage, OutputConfig};
+    pub use crate::core::models::OutputConfig;
 
     // Filtering
     pub use crate::core::filter::{FilterConfig, apply_filters};

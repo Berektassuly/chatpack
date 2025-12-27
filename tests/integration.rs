@@ -750,7 +750,7 @@ mod output_config_tests {
 }
 
 // ============================================================================
-// InternalMessage Tests
+// Message Tests
 // ============================================================================
 
 mod message_tests {
@@ -762,7 +762,7 @@ mod message_tests {
         let ts = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
         let edit_ts = Utc.with_ymd_and_hms(2024, 1, 15, 11, 0, 0).unwrap();
 
-        let msg = InternalMessage::new("Alice", "Hello")
+        let msg = Message::new("Alice", "Hello")
             .with_id(123)
             .with_timestamp(ts)
             .with_reply_to(122)
@@ -778,25 +778,25 @@ mod message_tests {
 
     #[test]
     fn test_message_has_metadata() {
-        let simple = InternalMessage::new("Bob", "Hi");
+        let simple = Message::new("Bob", "Hi");
         assert!(!simple.has_metadata());
 
-        let with_id = InternalMessage::new("Bob", "Hi").with_id(1);
+        let with_id = Message::new("Bob", "Hi").with_id(1);
         assert!(with_id.has_metadata());
     }
 
     #[test]
     fn test_message_is_empty() {
-        let empty = InternalMessage::new("Alice", "");
+        let empty = Message::new("Alice", "");
         assert!(empty.is_empty());
 
-        let not_empty = InternalMessage::new("Alice", "Hello");
+        let not_empty = Message::new("Alice", "Hello");
         assert!(!not_empty.is_empty());
     }
 
     #[test]
     fn test_message_clone() {
-        let msg = InternalMessage::new("Alice", "Hello").with_id(1);
+        let msg = Message::new("Alice", "Hello").with_id(1);
         let cloned = msg.clone();
 
         assert_eq!(msg.sender, cloned.sender);
@@ -806,7 +806,7 @@ mod message_tests {
 
     #[test]
     fn test_message_debug() {
-        let msg = InternalMessage::new("Alice", "Hello");
+        let msg = Message::new("Alice", "Hello");
         let debug = format!("{msg:?}");
 
         assert!(debug.contains("Alice"));
@@ -815,9 +815,9 @@ mod message_tests {
 
     #[test]
     fn test_message_partial_eq() {
-        let msg1 = InternalMessage::new("Alice", "Hello");
-        let msg2 = InternalMessage::new("Alice", "Hello");
-        let msg3 = InternalMessage::new("Bob", "Hello");
+        let msg1 = Message::new("Alice", "Hello");
+        let msg2 = Message::new("Alice", "Hello");
+        let msg3 = Message::new("Bob", "Hello");
 
         assert_eq!(msg1, msg2);
         assert_ne!(msg1, msg3);
@@ -979,12 +979,10 @@ mod serde_tests {
     #[test]
     fn test_message_serialize_deserialize() {
         let ts = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
-        let msg = InternalMessage::new("Alice", "Hello")
-            .with_id(1)
-            .with_timestamp(ts);
+        let msg = Message::new("Alice", "Hello").with_id(1).with_timestamp(ts);
 
         let json = serde_json::to_string(&msg).unwrap();
-        let deserialized: InternalMessage = serde_json::from_str(&json).unwrap();
+        let deserialized: Message = serde_json::from_str(&json).unwrap();
 
         assert_eq!(msg, deserialized);
     }

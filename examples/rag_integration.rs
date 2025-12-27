@@ -18,7 +18,7 @@ struct ChatChunk {
 }
 
 /// Example: Time-window based chunking strategy
-fn chunk_by_time_window(messages: &[InternalMessage], window_minutes: i64) -> Vec<ChatChunk> {
+fn chunk_by_time_window(messages: &[Message], window_minutes: i64) -> Vec<ChatChunk> {
     let mut chunks = Vec::new();
     let mut current_chunk: Option<ChatChunk> = None;
 
@@ -78,23 +78,23 @@ fn main() {
     let base_time = Utc.with_ymd_and_hms(2024, 6, 15, 10, 0, 0).unwrap();
 
     let messages = vec![
-        InternalMessage::new("Alice", "Hey, have you seen the new project specs?")
+        Message::new("Alice", "Hey, have you seen the new project specs?")
             .with_timestamp(base_time)
             .with_id(1),
-        InternalMessage::new("Bob", "Yes! They look good")
+        Message::new("Bob", "Yes! They look good")
             .with_timestamp(base_time + chrono::Duration::minutes(1))
             .with_id(2),
-        InternalMessage::new("Bob", "But I have some concerns about the timeline")
+        Message::new("Bob", "But I have some concerns about the timeline")
             .with_timestamp(base_time + chrono::Duration::minutes(2))
             .with_id(3),
-        InternalMessage::new("Alice", "Let's discuss in the meeting")
+        Message::new("Alice", "Let's discuss in the meeting")
             .with_timestamp(base_time + chrono::Duration::minutes(3))
             .with_id(4),
         // Gap of 30 minutes
-        InternalMessage::new("Alice", "Meeting notes: decided to extend deadline")
+        Message::new("Alice", "Meeting notes: decided to extend deadline")
             .with_timestamp(base_time + chrono::Duration::minutes(35))
             .with_id(5),
-        InternalMessage::new("Bob", "Great, I'll update the schedule")
+        Message::new("Bob", "Great, I'll update the schedule")
             .with_timestamp(base_time + chrono::Duration::minutes(36))
             .with_id(6),
     ];
@@ -139,7 +139,7 @@ fn main() {
 
     println!("\n=== Integration complete! ===");
     println!("\nKey chatpack types used:");
-    println!("   - InternalMessage: Universal message format");
+    println!("   - Message: Universal message format");
     println!("   - create_parser(Source): Get appropriate parser");
     println!("   - merge_consecutive(): Reduce message count");
     println!("   - apply_filters(): Filter by date/sender");
