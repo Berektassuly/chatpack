@@ -156,6 +156,10 @@ mod tests {
     use crate::parsing::telegram::extract_telegram_text;
     use serde_json::json;
 
+    // =========================================================================
+    // extract_telegram_text tests
+    // =========================================================================
+
     #[test]
     fn test_extract_text_string() {
         let value = json!("Hello world");
@@ -176,14 +180,191 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_text_array_with_bold_italic() {
+        let value = json!([
+            "Normal ",
+            {"type": "bold", "text": "bold"},
+            " and ",
+            {"type": "italic", "text": "italic"}
+        ]);
+        assert_eq!(extract_telegram_text(&value), "Normal bold and italic");
+    }
+
+    #[test]
     fn test_extract_text_empty() {
         let value = json!(null);
         assert_eq!(extract_telegram_text(&value), "");
     }
 
     #[test]
+    fn test_extract_text_empty_string() {
+        let value = json!("");
+        assert_eq!(extract_telegram_text(&value), "");
+    }
+
+    #[test]
+    fn test_extract_text_empty_array() {
+        let value = json!([]);
+        assert_eq!(extract_telegram_text(&value), "");
+    }
+
+    // =========================================================================
+    // TelegramParser tests
+    // =========================================================================
+
+    #[test]
     fn test_parser_name() {
         let parser = TelegramParser::new();
         assert_eq!(Parser::name(&parser), "Telegram");
+    }
+
+    #[test]
+    fn test_parser_platform() {
+        let parser = TelegramParser::new();
+        assert_eq!(parser.platform(), Platform::Telegram);
+    }
+
+    #[test]
+    fn test_parser_default() {
+        let parser = TelegramParser::default();
+        assert!(!parser.config().streaming);
+    }
+
+    #[test]
+    fn test_parser_with_config() {
+        let config = TelegramConfig::new().with_streaming(true);
+        let parser = TelegramParser::with_config(config);
+        assert!(parser.config().streaming);
+    }
+
+    #[test]
+    fn test_parser_with_streaming() {
+        let parser = TelegramParser::with_streaming();
+        assert!(parser.config().streaming);
+    }
+
+    #[test]
+    fn test_parser_config_accessor() {
+        let parser = TelegramParser::new();
+        let config = parser.config();
+        assert_eq!(config.buffer_size, 64 * 1024);
+    }
+
+    // =========================================================================
+    // parse_str tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_simple() {
+        let parser = TelegramParser::new();
+        let json = r#"{"messages": [{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Alice", "text": "Hello"}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[0].content, "Hello");
+    }
+
+    #[test]
+    fn test_parse_str_with_formatted_text() {
+        let parser = TelegramParser::new();
+        let json = r#"{"messages": [{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Bob", "text": ["Hello ", {"type": "bold", "text": "world"}]}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content, "Hello world");
+    }
+
+    #[test]
+    fn test_parse_str_with_reply() {
+        let parser = TelegramParser::new();
+        let json = r#"{"messages": [{"id": 2, "type": "message", "date_unixtime": "1234567890", "from": "Alice", "text": "Reply", "reply_to_message_id": 1}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].reply_to, Some(1));
+    }
+
+    #[test]
+    fn test_parse_str_with_edited() {
+        let parser = TelegramParser::new();
+        let json = r#"{"messages": [{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Alice", "text": "Edited", "edited_unixtime": "1234567899"}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].edited.is_some());
+    }
+
+    #[test]
+    fn test_parse_str_filters_service_messages() {
+        let parser = TelegramParser::new();
+        let json = r#"{"messages": [
+            {"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Alice", "text": "Hello"},
+            {"id": 2, "type": "service", "date_unixtime": "1234567890", "from": "System", "text": "joined"},
+            {"id": 3, "type": "message", "date_unixtime": "1234567890", "from": "Bob", "text": "Hi"}
+        ]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[1].sender, "Bob");
+    }
+
+    #[test]
+    fn test_parse_str_filters_empty_content() {
+        let parser = TelegramParser::new();
+        let json = r#"{"messages": [
+            {"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Alice", "text": "Hello"},
+            {"id": 2, "type": "message", "date_unixtime": "1234567890", "from": "Bob", "text": ""},
+            {"id": 3, "type": "message", "date_unixtime": "1234567890", "from": "Charlie", "text": "Hi"}
+        ]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_str_empty_messages() {
+        let parser = TelegramParser::new();
+        let json = r#"{"messages": []}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn test_parse_str_invalid_json() {
+        let parser = TelegramParser::new();
+        let result = parser.parse_str("invalid json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_str_missing_messages() {
+        let parser = TelegramParser::new();
+        let result = parser.parse_str(r#"{"name": "Test"}"#);
+        // Should fail because messages is missing
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // Streaming support tests
+    // =========================================================================
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_supports_streaming_false_by_default() {
+        let parser = TelegramParser::new();
+        assert!(!parser.supports_streaming());
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_supports_streaming_true_when_enabled() {
+        let parser = TelegramParser::with_streaming();
+        assert!(parser.supports_streaming());
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_recommended_buffer_size() {
+        let parser = TelegramParser::new();
+        assert_eq!(parser.recommended_buffer_size(), 64 * 1024);
+
+        let streaming_parser = TelegramParser::with_streaming();
+        assert_eq!(streaming_parser.recommended_buffer_size(), 256 * 1024);
     }
 }

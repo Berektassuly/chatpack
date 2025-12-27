@@ -76,17 +76,30 @@ impl From<serde_json::Error> for StreamingError {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // Display tests
+    // =========================================================================
+
     #[test]
-    fn test_error_display() {
-        let err = StreamingError::InvalidFormat("missing messages array".into());
-        assert!(err.to_string().contains("Invalid format"));
+    fn test_error_display_io() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
+        let err = StreamingError::Io(io_err);
+        let display = err.to_string();
+        assert!(display.contains("IO error"));
+        assert!(display.contains("file not found"));
     }
 
     #[test]
-    fn test_error_from_io() {
-        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
-        let streaming_err: StreamingError = io_err.into();
-        assert!(matches!(streaming_err, StreamingError::Io(_)));
+    fn test_error_display_invalid_format() {
+        let err = StreamingError::InvalidFormat("missing messages array".into());
+        assert!(err.to_string().contains("Invalid format"));
+        assert!(err.to_string().contains("missing messages array"));
+    }
+
+    #[test]
+    fn test_error_display_unexpected_eof() {
+        let err = StreamingError::UnexpectedEof;
+        assert!(err.to_string().contains("Unexpected end of file"));
     }
 
     #[test]
@@ -98,5 +111,79 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("2048"));
         assert!(msg.contains("1024"));
+        assert!(msg.contains("too large"));
+    }
+
+    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord"))]
+    #[test]
+    fn test_error_display_json() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let err = StreamingError::Json(json_err);
+        assert!(err.to_string().contains("JSON error"));
+    }
+
+    // =========================================================================
+    // From conversions tests
+    // =========================================================================
+
+    #[test]
+    fn test_error_from_io() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
+        let streaming_err: StreamingError = io_err.into();
+        assert!(matches!(streaming_err, StreamingError::Io(_)));
+    }
+
+    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord"))]
+    #[test]
+    fn test_error_from_json() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let streaming_err: StreamingError = json_err.into();
+        assert!(matches!(streaming_err, StreamingError::Json(_)));
+    }
+
+    // =========================================================================
+    // Error source tests
+    // =========================================================================
+
+    #[test]
+    fn test_error_source_io() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
+        let err = StreamingError::Io(io_err);
+        assert!(err.source().is_some());
+    }
+
+    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord"))]
+    #[test]
+    fn test_error_source_json() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let err = StreamingError::Json(json_err);
+        assert!(err.source().is_some());
+    }
+
+    #[test]
+    fn test_error_source_none() {
+        let err = StreamingError::InvalidFormat("test".into());
+        assert!(err.source().is_none());
+
+        let err = StreamingError::UnexpectedEof;
+        assert!(err.source().is_none());
+
+        let err = StreamingError::BufferOverflow {
+            max_size: 1024,
+            actual_size: 2048,
+        };
+        assert!(err.source().is_none());
+    }
+
+    // =========================================================================
+    // Debug tests
+    // =========================================================================
+
+    #[test]
+    fn test_error_debug() {
+        let err = StreamingError::InvalidFormat("test".into());
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("InvalidFormat"));
+        assert!(debug.contains("test"));
     }
 }

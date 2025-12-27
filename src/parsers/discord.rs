@@ -505,6 +505,10 @@ impl Parser for DiscordParser {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // DiscordParser construction tests
+    // =========================================================================
+
     #[test]
     fn test_parser_name() {
         let parser = DiscordParser::new();
@@ -512,10 +516,38 @@ mod tests {
     }
 
     #[test]
+    fn test_parser_platform() {
+        let parser = DiscordParser::new();
+        assert_eq!(parser.platform(), Platform::Discord);
+    }
+
+    #[test]
     fn test_parser_default() {
         let parser = DiscordParser::default();
         assert_eq!(Parser::name(&parser), "Discord");
+        assert!(parser.config().prefer_nickname);
+        assert!(parser.config().include_attachments);
     }
+
+    #[test]
+    fn test_parser_with_config() {
+        let config = DiscordConfig::new()
+            .with_streaming(true)
+            .with_prefer_nickname(false);
+        let parser = DiscordParser::with_config(config);
+        assert!(parser.config().streaming);
+        assert!(!parser.config().prefer_nickname);
+    }
+
+    #[test]
+    fn test_parser_with_streaming() {
+        let parser = DiscordParser::with_streaming();
+        assert!(parser.config().streaming);
+    }
+
+    // =========================================================================
+    // Format detection tests
+    // =========================================================================
 
     #[test]
     fn test_format_detection_from_ext() {
@@ -541,9 +573,14 @@ mod tests {
             DiscordParser::detect_format_from_ext("test.CSV"),
             Some(DiscordFormat::Csv)
         ));
+        assert!(matches!(
+            DiscordParser::detect_format_from_ext("test.TXT"),
+            Some(DiscordFormat::Txt)
+        ));
 
         // No extension
         assert!(DiscordParser::detect_format_from_ext("test").is_none());
+        assert!(DiscordParser::detect_format_from_ext("test.unknown").is_none());
     }
 
     #[test]
@@ -557,10 +594,22 @@ mod tests {
             DiscordFormat::Csv
         ));
         assert!(matches!(
+            DiscordParser::detect_format_from_content(r#""a","b","c""#),
+            DiscordFormat::Csv
+        ));
+        assert!(matches!(
             DiscordParser::detect_format_from_content("[1/15/2024 10:30 AM] alice"),
             DiscordFormat::Txt
         ));
+        assert!(matches!(
+            DiscordParser::detect_format_from_content("plain text"),
+            DiscordFormat::Txt
+        ));
     }
+
+    // =========================================================================
+    // JSON parsing tests
+    // =========================================================================
 
     #[test]
     fn test_parse_json_basic() {
@@ -580,6 +629,8 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].sender, "alice");
         assert_eq!(messages[0].content, "Hello world");
+        assert!(messages[0].timestamp.is_some());
+        assert_eq!(messages[0].id, Some(123));
     }
 
     #[test]
@@ -601,13 +652,227 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_json_with_attachments() {
+        let parser = DiscordParser::new();
+        let json = r#"{
+            "messages": [
+                {
+                    "id": "123",
+                    "timestamp": "2024-01-15T10:30:00+00:00",
+                    "content": "Check this out",
+                    "author": {"name": "alice"},
+                    "attachments": [{"fileName": "image.png"}, {"fileName": "doc.pdf"}]
+                }
+            ]
+        }"#;
+
+        let messages = parser.parse_json(json).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].content.contains("Check this out"));
+        assert!(messages[0].content.contains("[Attachment: image.png]"));
+        assert!(messages[0].content.contains("[Attachment: doc.pdf]"));
+    }
+
+    #[test]
+    fn test_parse_json_with_stickers() {
+        let parser = DiscordParser::new();
+        let json = r#"{
+            "messages": [
+                {
+                    "id": "123",
+                    "timestamp": "2024-01-15T10:30:00+00:00",
+                    "content": "",
+                    "author": {"name": "alice"},
+                    "stickers": [{"name": "cool_sticker"}]
+                }
+            ]
+        }"#;
+
+        let messages = parser.parse_json(json).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].content.contains("[Sticker: cool_sticker]"));
+    }
+
+    #[test]
+    fn test_parse_json_with_reply() {
+        let parser = DiscordParser::new();
+        let json = r#"{
+            "messages": [
+                {
+                    "id": "124",
+                    "timestamp": "2024-01-15T10:30:00+00:00",
+                    "content": "Reply!",
+                    "author": {"name": "bob"},
+                    "reference": {"messageId": "123"}
+                }
+            ]
+        }"#;
+
+        let messages = parser.parse_json(json).unwrap();
+        assert_eq!(messages[0].reply_to, Some(123));
+    }
+
+    #[test]
+    fn test_parse_json_with_edited() {
+        let parser = DiscordParser::new();
+        let json = r#"{
+            "messages": [
+                {
+                    "id": "123",
+                    "timestamp": "2024-01-15T10:30:00+00:00",
+                    "timestampEdited": "2024-01-15T10:35:00+00:00",
+                    "content": "Edited message",
+                    "author": {"name": "alice"}
+                }
+            ]
+        }"#;
+
+        let messages = parser.parse_json(json).unwrap();
+        assert!(messages[0].edited.is_some());
+    }
+
+    #[test]
+    fn test_parse_json_skips_empty() {
+        let parser = DiscordParser::new();
+        let json = r#"{
+            "messages": [
+                {
+                    "id": "123",
+                    "timestamp": "2024-01-15T10:30:00+00:00",
+                    "content": "Hello",
+                    "author": {"name": "alice"}
+                },
+                {
+                    "id": "124",
+                    "timestamp": "2024-01-15T10:31:00+00:00",
+                    "content": "",
+                    "author": {"name": "bob"}
+                }
+            ]
+        }"#;
+
+        let messages = parser.parse_json(json).unwrap();
+        assert_eq!(messages.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_json_empty_messages() {
+        let parser = DiscordParser::new();
+        let json = r#"{"messages": []}"#;
+        let messages = parser.parse_json(json).unwrap();
+        assert!(messages.is_empty());
+    }
+
+    // =========================================================================
+    // TXT parsing tests
+    // =========================================================================
+
+    #[test]
     fn test_txt_timestamp_parsing() {
         let ts = DiscordParser::parse_txt_timestamp("1/15/2024 10:30 AM");
         assert!(ts.is_some());
 
         let ts = DiscordParser::parse_txt_timestamp("12/31/2024 11:59 PM");
         assert!(ts.is_some());
+
+        let ts = DiscordParser::parse_txt_timestamp("1/1/2024 1:00 AM");
+        assert!(ts.is_some());
+
+        // 24-hour format
+        let ts = DiscordParser::parse_txt_timestamp("1/15/2024 14:30");
+        assert!(ts.is_some());
     }
+
+    #[test]
+    fn test_parse_txt_basic() {
+        let parser = DiscordParser::new();
+        let txt = "[1/15/2024 10:30 AM] alice\nHello world\n[1/15/2024 10:31 AM] bob\nHi there";
+
+        let messages = parser.parse_txt(txt).unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "alice");
+        assert_eq!(messages[0].content, "Hello world");
+        assert_eq!(messages[1].sender, "bob");
+        assert_eq!(messages[1].content, "Hi there");
+    }
+
+    #[test]
+    fn test_parse_txt_multiline() {
+        let parser = DiscordParser::new();
+        let txt = "[1/15/2024 10:30 AM] alice\nLine 1\nLine 2\nLine 3";
+
+        let messages = parser.parse_txt(txt).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content, "Line 1\nLine 2\nLine 3");
+    }
+
+    #[test]
+    fn test_parse_txt_with_attachments() {
+        let parser = DiscordParser::new();
+        let txt = "[1/15/2024 10:30 AM] alice\nMessage\n{Attachments}\nhttps://cdn.discord.com/image.png";
+
+        let messages = parser.parse_txt(txt).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].content.contains("Message"));
+        assert!(messages[0].content.contains("[Attachment: image.png]"));
+    }
+
+    #[test]
+    fn test_parse_txt_with_stickers() {
+        let parser = DiscordParser::new();
+        let txt = "[1/15/2024 10:30 AM] alice\n{Stickers}\ncool_sticker";
+
+        let messages = parser.parse_txt(txt).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].content.contains("[Sticker: cool_sticker]"));
+    }
+
+    #[test]
+    fn test_parse_txt_empty() {
+        let parser = DiscordParser::new();
+        let txt = "";
+        let messages = parser.parse_txt(txt).unwrap();
+        assert!(messages.is_empty());
+    }
+
+    // =========================================================================
+    // CSV parsing tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_csv_basic() {
+        let parser = DiscordParser::new();
+        let csv = "AuthorID,Author,Date,Content,Attachments,Reactions\n123,alice,2024-01-15T10:30:00+00:00,Hello world,,";
+
+        let messages = parser.parse_csv_str(csv).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "alice");
+        assert_eq!(messages[0].content, "Hello world");
+    }
+
+    #[test]
+    fn test_parse_csv_with_attachments() {
+        let parser = DiscordParser::new();
+        let csv = "AuthorID,Author,Date,Content,Attachments,Reactions\n123,alice,2024-01-15T10:30:00+00:00,Check this,https://cdn.discord.com/image.png,";
+
+        let messages = parser.parse_csv_str(csv).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].content.contains("Check this"));
+        assert!(messages[0].content.contains("[Attachment: image.png]"));
+    }
+
+    #[test]
+    fn test_parse_csv_skips_empty() {
+        let parser = DiscordParser::new();
+        let csv = "AuthorID,Author,Date,Content,Attachments,Reactions\n123,alice,2024-01-15T10:30:00+00:00,Hello,,\n124,bob,2024-01-15T10:31:00+00:00,,,";
+
+        let messages = parser.parse_csv_str(csv).unwrap();
+        assert_eq!(messages.len(), 1);
+    }
+
+    // =========================================================================
+    // parse_str auto-detection tests
+    // =========================================================================
 
     #[test]
     fn test_parse_str_json() {
@@ -617,5 +882,53 @@ mod tests {
         let messages = Parser::parse_str(&parser, json).unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].sender, "bob");
+    }
+
+    #[test]
+    fn test_parse_str_csv() {
+        let parser = DiscordParser::new();
+        let csv = "AuthorID,Author,Date,Content,Attachments\n123,alice,2024-01-15T10:30:00+00:00,Hello,";
+
+        let messages = Parser::parse_str(&parser, csv).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "alice");
+    }
+
+    #[test]
+    fn test_parse_str_txt() {
+        let parser = DiscordParser::new();
+        let txt = "[1/15/2024 10:30 AM] alice\nHello world";
+
+        let messages = Parser::parse_str(&parser, txt).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "alice");
+    }
+
+    // =========================================================================
+    // Streaming support tests
+    // =========================================================================
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_supports_streaming_false_by_default() {
+        let parser = DiscordParser::new();
+        assert!(!parser.supports_streaming());
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_supports_streaming_true_when_enabled() {
+        let parser = DiscordParser::with_streaming();
+        assert!(parser.supports_streaming());
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_recommended_buffer_size() {
+        let parser = DiscordParser::new();
+        assert_eq!(parser.recommended_buffer_size(), 64 * 1024);
+
+        let streaming_parser = DiscordParser::with_streaming();
+        assert_eq!(streaming_parser.recommended_buffer_size(), 256 * 1024);
     }
 }

@@ -357,6 +357,10 @@ impl From<crate::streaming::StreamingError> for ChatpackError {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // Display tests for all error variants
+    // =========================================================================
+
     #[test]
     fn test_io_error_display() {
         let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
@@ -386,6 +390,40 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_error_without_path() {
+        let err = ChatpackError::Parse {
+            format: "WhatsApp TXT",
+            source: ParseErrorKind::Pattern("invalid pattern".into()),
+            path: None,
+        };
+        let display = err.to_string();
+        assert!(display.contains("WhatsApp TXT"));
+        assert!(!display.contains("file:"));
+    }
+
+    #[test]
+    fn test_parse_error_other_kind() {
+        let err = ChatpackError::Parse {
+            format: "Test",
+            source: ParseErrorKind::Other("custom error".into()),
+            path: None,
+        };
+        let display = err.to_string();
+        assert!(display.contains("custom error"));
+    }
+
+    #[test]
+    fn test_invalid_format_display() {
+        let err = ChatpackError::InvalidFormat {
+            format: "Discord",
+            message: "unrecognized export format".into(),
+        };
+        let display = err.to_string();
+        assert!(display.contains("Discord"));
+        assert!(display.contains("unrecognized export format"));
+    }
+
+    #[test]
     fn test_invalid_date_display() {
         let err = ChatpackError::invalid_date("not-a-date");
         let display = err.to_string();
@@ -402,6 +440,41 @@ mod tests {
     }
 
     #[test]
+    fn test_unexpected_eof_display() {
+        let err = ChatpackError::unexpected_eof("parsing JSON array");
+        let display = err.to_string();
+        assert!(display.contains("Unexpected end of file"));
+        assert!(display.contains("parsing JSON array"));
+    }
+
+    #[test]
+    fn test_streaming_error_display() {
+        let err = ChatpackError::Streaming(StreamingErrorKind::InvalidFormat(
+            "missing header".into(),
+        ));
+        let display = err.to_string();
+        assert!(display.contains("Streaming error"));
+        assert!(display.contains("missing header"));
+    }
+
+    #[test]
+    fn test_utf8_error_display() {
+        let invalid_bytes = vec![0xff, 0xfe];
+        let utf8_err = String::from_utf8(invalid_bytes).unwrap_err();
+        let err = ChatpackError::Utf8 {
+            context: "reading file".into(),
+            source: utf8_err,
+        };
+        let display = err.to_string();
+        assert!(display.contains("UTF-8"));
+        assert!(display.contains("reading file"));
+    }
+
+    // =========================================================================
+    // Error source chain tests
+    // =========================================================================
+
+    #[test]
     fn test_error_source_chain() {
         use std::error::Error;
         let io_err = io::Error::new(io::ErrorKind::PermissionDenied, "access denied");
@@ -410,15 +483,54 @@ mod tests {
     }
 
     #[test]
+    fn test_streaming_error_source() {
+        use std::error::Error;
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "not found");
+        let streaming_err = StreamingErrorKind::Io(io_err);
+        let err = ChatpackError::Streaming(streaming_err);
+        assert!(err.source().is_some());
+    }
+
+    // =========================================================================
+    // is_* methods tests
+    // =========================================================================
+
+    #[test]
     fn test_is_methods() {
         let io_err = ChatpackError::Io(io::Error::new(io::ErrorKind::NotFound, ""));
         assert!(io_err.is_io());
         assert!(!io_err.is_parse());
+        assert!(!io_err.is_invalid_format());
+        assert!(!io_err.is_invalid_date());
 
         let date_err = ChatpackError::invalid_date("bad");
         assert!(date_err.is_invalid_date());
         assert!(!date_err.is_io());
+        assert!(!date_err.is_parse());
+        assert!(!date_err.is_invalid_format());
     }
+
+    #[test]
+    fn test_is_parse() {
+        let err = ChatpackError::Parse {
+            format: "Test",
+            source: ParseErrorKind::Other("test".into()),
+            path: None,
+        };
+        assert!(err.is_parse());
+        assert!(!err.is_io());
+    }
+
+    #[test]
+    fn test_is_invalid_format() {
+        let err = ChatpackError::invalid_format("Test", "bad format");
+        assert!(err.is_invalid_format());
+        assert!(!err.is_parse());
+    }
+
+    // =========================================================================
+    // Convenience constructors tests
+    // =========================================================================
 
     #[test]
     fn test_convenience_constructors() {
@@ -432,6 +544,191 @@ mod tests {
     }
 
     #[test]
+    fn test_whatsapp_parse_constructor() {
+        let err = ChatpackError::whatsapp_parse("invalid format", None);
+        assert!(err.is_parse());
+        assert!(err.to_string().contains("WhatsApp TXT"));
+
+        let err_with_path =
+            ChatpackError::whatsapp_parse("invalid format", Some(PathBuf::from("/test.txt")));
+        assert!(err_with_path.to_string().contains("/test.txt"));
+    }
+
+    #[cfg(feature = "telegram")]
+    #[test]
+    fn test_telegram_parse_constructor() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let err = ChatpackError::telegram_parse(json_err, None);
+        assert!(err.is_parse());
+        assert!(err.to_string().contains("Telegram JSON"));
+    }
+
+    #[cfg(feature = "instagram")]
+    #[test]
+    fn test_instagram_parse_constructor() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let err = ChatpackError::instagram_parse(json_err, None);
+        assert!(err.is_parse());
+        assert!(err.to_string().contains("Instagram JSON"));
+    }
+
+    #[cfg(feature = "discord")]
+    #[test]
+    fn test_discord_parse_constructor() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let err = ChatpackError::discord_parse(json_err, None);
+        assert!(err.is_parse());
+        assert!(err.to_string().contains("Discord"));
+    }
+
+    #[test]
+    fn test_streaming_constructor() {
+        let kind = StreamingErrorKind::UnexpectedEof;
+        let err = ChatpackError::streaming(kind);
+        assert!(err.to_string().contains("Streaming error"));
+    }
+
+    // =========================================================================
+    // From conversions tests
+    // =========================================================================
+
+    #[test]
+    fn test_from_io_error() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
+        let err: ChatpackError = io_err.into();
+        assert!(err.is_io());
+    }
+
+    #[cfg(any(feature = "csv-output", feature = "discord"))]
+    #[test]
+    fn test_from_csv_error() {
+        // Create a CSV error by using a writer and forcing an error
+        use std::io::Cursor;
+        let mut wtr = csv::Writer::from_writer(Cursor::new(Vec::new()));
+        // Write some data first
+        wtr.write_record(["a", "b"]).expect("write");
+        // Create error via deserialization of invalid data
+        let data = "field1,field2\n\"unclosed";
+        let mut rdr = csv::ReaderBuilder::new().from_reader(data.as_bytes());
+        for result in rdr.records() {
+            if let Err(csv_err) = result {
+                let err: ChatpackError = csv_err.into();
+                assert!(err.to_string().contains("CSV error"));
+                return;
+            }
+        }
+        // If we reach here, force an error in a different way
+        // The Csv variant just needs to be tested for From conversion
+        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test");
+        let csv_err = csv::Error::from(io_err);
+        let err: ChatpackError = csv_err.into();
+        assert!(err.to_string().contains("CSV error"));
+    }
+
+    #[cfg(any(
+        feature = "telegram",
+        feature = "instagram",
+        feature = "discord",
+        feature = "json-output"
+    ))]
+    #[test]
+    fn test_from_json_error() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let err: ChatpackError = json_err.into();
+        assert!(err.to_string().contains("JSON error"));
+    }
+
+    #[test]
+    fn test_from_utf8_error() {
+        let invalid_bytes = vec![0xff, 0xfe];
+        let utf8_err = String::from_utf8(invalid_bytes).unwrap_err();
+        let err: ChatpackError = utf8_err.into();
+        assert!(err.to_string().contains("UTF-8"));
+    }
+
+    // =========================================================================
+    // StreamingErrorKind tests
+    // =========================================================================
+
+    #[test]
+    fn test_streaming_error_kind_io() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "not found");
+        let kind = StreamingErrorKind::Io(io_err);
+        assert!(kind.to_string().contains("IO error"));
+    }
+
+    #[cfg(any(
+        feature = "telegram",
+        feature = "instagram",
+        feature = "discord",
+        feature = "json-output"
+    ))]
+    #[test]
+    fn test_streaming_error_kind_json() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let kind = StreamingErrorKind::Json(json_err);
+        assert!(kind.to_string().contains("JSON error"));
+    }
+
+    #[test]
+    fn test_streaming_error_kind_invalid_format() {
+        let kind = StreamingErrorKind::InvalidFormat("missing messages array".into());
+        assert!(kind.to_string().contains("Invalid format"));
+        assert!(kind.to_string().contains("missing messages array"));
+    }
+
+    #[test]
+    fn test_streaming_error_kind_buffer_overflow() {
+        let kind = StreamingErrorKind::BufferOverflow {
+            max_size: 1024,
+            actual_size: 2048,
+        };
+        let display = kind.to_string();
+        assert!(display.contains("Buffer overflow"));
+        assert!(display.contains("1024"));
+        assert!(display.contains("2048"));
+    }
+
+    #[test]
+    fn test_streaming_error_kind_unexpected_eof() {
+        let kind = StreamingErrorKind::UnexpectedEof;
+        assert!(kind.to_string().contains("Unexpected end of file"));
+    }
+
+    // =========================================================================
+    // ParseErrorKind tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_error_kind_pattern() {
+        let kind = ParseErrorKind::Pattern("invalid regex".into());
+        assert!(kind.to_string().contains("invalid regex"));
+    }
+
+    #[test]
+    fn test_parse_error_kind_other() {
+        let kind = ParseErrorKind::Other("unknown error".into());
+        assert!(kind.to_string().contains("unknown error"));
+    }
+
+    #[cfg(any(
+        feature = "telegram",
+        feature = "instagram",
+        feature = "discord",
+        feature = "json-output"
+    ))]
+    #[test]
+    fn test_parse_error_kind_json() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let kind = ParseErrorKind::Json(json_err);
+        assert!(!kind.to_string().is_empty());
+    }
+
+    // =========================================================================
+    // Result type alias test
+    // =========================================================================
+
+    #[test]
     fn test_result_type_alias() {
         fn returns_result() -> i32 {
             42
@@ -441,7 +738,24 @@ mod tests {
             Err(ChatpackError::invalid_date("bad"))
         }
 
+        fn returns_ok() -> Result<i32> {
+            Ok(42)
+        }
+
         assert_eq!(returns_result(), 42);
         assert!(returns_error().is_err());
+        assert!(returns_ok().is_ok());
+        assert_eq!(returns_ok().unwrap(), 42);
+    }
+
+    // =========================================================================
+    // Debug trait test
+    // =========================================================================
+
+    #[test]
+    fn test_error_debug() {
+        let err = ChatpackError::invalid_date("bad");
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("InvalidDate"));
     }
 }

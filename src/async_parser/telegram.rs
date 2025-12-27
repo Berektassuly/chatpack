@@ -81,11 +81,79 @@ impl AsyncParser for AsyncTelegramParser {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // AsyncTelegramParser construction tests
+    // =========================================================================
+
+    #[test]
+    fn test_parser_new() {
+        let parser = AsyncTelegramParser::new();
+        assert_eq!(parser.name(), "Telegram (Async)");
+    }
+
+    #[test]
+    fn test_parser_default() {
+        let parser = AsyncTelegramParser::default();
+        assert_eq!(parser.name(), "Telegram (Async)");
+    }
+
+    #[test]
+    fn test_parser_with_config() {
+        let config = TelegramConfig::new().with_streaming(true);
+        let parser = AsyncTelegramParser::with_config(config);
+        assert_eq!(parser.name(), "Telegram (Async)");
+    }
+
+    // =========================================================================
+    // Async parse tests
+    // =========================================================================
+
     #[tokio::test]
     async fn test_async_parser_name() {
         let parser = AsyncTelegramParser::new();
         assert_eq!(parser.name(), "Telegram (Async)");
     }
+
+    #[tokio::test]
+    async fn test_async_parse_file() {
+        use tokio::io::AsyncWriteExt;
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let file_path = dir.path().join("test.json");
+
+        let json = r#"{
+            "messages": [
+                {
+                    "id": 1,
+                    "type": "message",
+                    "date_unixtime": "1705314600",
+                    "from": "Alice",
+                    "text": "Hello async!"
+                }
+            ]
+        }"#;
+
+        let mut file = tokio::fs::File::create(&file_path).await.expect("create file");
+        file.write_all(json.as_bytes()).await.expect("write");
+        file.flush().await.expect("flush");
+
+        let parser = AsyncTelegramParser::new();
+        let messages = parser.parse(&file_path).await.expect("parse failed");
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[0].content, "Hello async!");
+    }
+
+    #[tokio::test]
+    async fn test_async_parse_file_not_found() {
+        let parser = AsyncTelegramParser::new();
+        let result = parser.parse("/nonexistent/file.json").await;
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // parse_str tests
+    // =========================================================================
 
     #[test]
     fn test_parse_str() {
@@ -107,5 +175,74 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].sender, "Alice");
         assert_eq!(messages[0].content, "Hello!");
+    }
+
+    #[test]
+    fn test_parse_str_multiple_messages() {
+        let json = r#"{
+            "messages": [
+                {"id": 1, "type": "message", "date_unixtime": "1705314600", "from": "Alice", "text": "Hello!"},
+                {"id": 2, "type": "message", "date_unixtime": "1705314601", "from": "Bob", "text": "Hi!"}
+            ]
+        }"#;
+
+        let parser = AsyncTelegramParser::new();
+        let messages = parser.parse_str(json).unwrap();
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[1].sender, "Bob");
+    }
+
+    #[test]
+    fn test_parse_str_invalid_json() {
+        let parser = AsyncTelegramParser::new();
+        let result = parser.parse_str("invalid json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_str_empty_messages() {
+        let json = r#"{"messages": []}"#;
+        let parser = AsyncTelegramParser::new();
+        let messages = parser.parse_str(json).unwrap();
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn test_parse_str_with_formatted_text() {
+        let json = r#"{
+            "messages": [
+                {
+                    "id": 1,
+                    "type": "message",
+                    "date_unixtime": "1705314600",
+                    "from": "Alice",
+                    "text": ["Hello ", {"type": "bold", "text": "world"}]
+                }
+            ]
+        }"#;
+
+        let parser = AsyncTelegramParser::new();
+        let messages = parser.parse_str(json).unwrap();
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content, "Hello world");
+    }
+
+    #[test]
+    fn test_parse_str_filters_service_messages() {
+        let json = r#"{
+            "messages": [
+                {"id": 1, "type": "message", "date_unixtime": "1705314600", "from": "Alice", "text": "Hello!"},
+                {"id": 2, "type": "service", "date_unixtime": "1705314601", "from": "System", "text": "joined"},
+                {"id": 3, "type": "message", "date_unixtime": "1705314602", "from": "Bob", "text": "Hi!"}
+            ]
+        }"#;
+
+        let parser = AsyncTelegramParser::new();
+        let messages = parser.parse_str(json).unwrap();
+
+        assert_eq!(messages.len(), 2);
     }
 }

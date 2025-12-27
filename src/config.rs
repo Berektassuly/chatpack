@@ -397,11 +397,25 @@ impl DiscordConfig {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // TelegramConfig tests
+    // =========================================================================
+
     #[test]
     fn test_telegram_config_default() {
         let config = TelegramConfig::default();
         assert!(!config.streaming);
         assert_eq!(config.buffer_size, 64 * 1024);
+        assert_eq!(config.max_message_size, 10 * 1024 * 1024);
+        assert!(config.skip_invalid);
+    }
+
+    #[test]
+    fn test_telegram_config_new() {
+        let config = TelegramConfig::new();
+        assert!(!config.streaming);
+        assert_eq!(config.buffer_size, 64 * 1024);
+        assert_eq!(config.max_message_size, 10 * 1024 * 1024);
         assert!(config.skip_invalid);
     }
 
@@ -423,24 +437,333 @@ mod tests {
     }
 
     #[test]
+    fn test_telegram_config_with_max_message_size() {
+        let config = TelegramConfig::new().with_max_message_size(5 * 1024 * 1024);
+        assert_eq!(config.max_message_size, 5 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_telegram_config_with_skip_invalid() {
+        let config = TelegramConfig::new().with_skip_invalid(false);
+        assert!(!config.skip_invalid);
+    }
+
+    #[test]
+    fn test_telegram_config_builder_chain() {
+        let config = TelegramConfig::new()
+            .with_streaming(true)
+            .with_buffer_size(512 * 1024)
+            .with_max_message_size(20 * 1024 * 1024)
+            .with_skip_invalid(false);
+
+        assert!(config.streaming);
+        assert_eq!(config.buffer_size, 512 * 1024);
+        assert_eq!(config.max_message_size, 20 * 1024 * 1024);
+        assert!(!config.skip_invalid);
+    }
+
+    #[test]
+    fn test_telegram_config_serde() {
+        let config = TelegramConfig::new().with_streaming(true);
+        let json = serde_json::to_string(&config).expect("serialize failed");
+        let parsed: TelegramConfig = serde_json::from_str(&json).expect("deserialize failed");
+        assert!(parsed.streaming);
+        assert_eq!(parsed.buffer_size, config.buffer_size);
+    }
+
+    // =========================================================================
+    // WhatsAppConfig tests
+    // =========================================================================
+
+    #[test]
     fn test_whatsapp_config_default() {
         let config = WhatsAppConfig::default();
+        assert!(!config.streaming);
+        assert_eq!(config.buffer_size, 64 * 1024);
+        assert!(config.skip_system_messages);
+        assert!(config.skip_invalid);
+    }
+
+    #[test]
+    fn test_whatsapp_config_new() {
+        let config = WhatsAppConfig::new();
         assert!(!config.streaming);
         assert!(config.skip_system_messages);
     }
 
     #[test]
+    fn test_whatsapp_config_streaming() {
+        let config = WhatsAppConfig::streaming();
+        assert!(config.streaming);
+        assert_eq!(config.buffer_size, 256 * 1024);
+    }
+
+    #[test]
+    fn test_whatsapp_config_with_streaming() {
+        let config = WhatsAppConfig::new().with_streaming(true);
+        assert!(config.streaming);
+    }
+
+    #[test]
+    fn test_whatsapp_config_with_buffer_size() {
+        let config = WhatsAppConfig::new().with_buffer_size(128 * 1024);
+        assert_eq!(config.buffer_size, 128 * 1024);
+    }
+
+    #[test]
+    fn test_whatsapp_config_with_skip_system_messages() {
+        let config = WhatsAppConfig::new().with_skip_system_messages(false);
+        assert!(!config.skip_system_messages);
+    }
+
+    #[test]
+    fn test_whatsapp_config_with_skip_invalid() {
+        let config = WhatsAppConfig::new().with_skip_invalid(false);
+        assert!(!config.skip_invalid);
+    }
+
+    #[test]
+    fn test_whatsapp_config_builder_chain() {
+        let config = WhatsAppConfig::new()
+            .with_streaming(true)
+            .with_buffer_size(512 * 1024)
+            .with_skip_system_messages(false)
+            .with_skip_invalid(false);
+
+        assert!(config.streaming);
+        assert_eq!(config.buffer_size, 512 * 1024);
+        assert!(!config.skip_system_messages);
+        assert!(!config.skip_invalid);
+    }
+
+    #[test]
+    fn test_whatsapp_config_serde() {
+        let config = WhatsAppConfig::new().with_skip_system_messages(false);
+        let json = serde_json::to_string(&config).expect("serialize failed");
+        let parsed: WhatsAppConfig = serde_json::from_str(&json).expect("deserialize failed");
+        assert!(!parsed.skip_system_messages);
+    }
+
+    // =========================================================================
+    // InstagramConfig tests
+    // =========================================================================
+
+    #[test]
     fn test_instagram_config_default() {
         let config = InstagramConfig::default();
+        assert!(!config.streaming);
+        assert_eq!(config.buffer_size, 64 * 1024);
+        assert_eq!(config.max_message_size, 10 * 1024 * 1024);
+        assert!(config.fix_encoding);
+        assert!(config.skip_invalid);
+    }
+
+    #[test]
+    fn test_instagram_config_new() {
+        let config = InstagramConfig::new();
         assert!(!config.streaming);
         assert!(config.fix_encoding);
     }
 
     #[test]
+    fn test_instagram_config_streaming() {
+        let config = InstagramConfig::streaming();
+        assert!(config.streaming);
+        assert_eq!(config.buffer_size, 256 * 1024);
+    }
+
+    #[test]
+    fn test_instagram_config_with_streaming() {
+        let config = InstagramConfig::new().with_streaming(true);
+        assert!(config.streaming);
+    }
+
+    #[test]
+    fn test_instagram_config_with_buffer_size() {
+        let config = InstagramConfig::new().with_buffer_size(128 * 1024);
+        assert_eq!(config.buffer_size, 128 * 1024);
+    }
+
+    #[test]
+    fn test_instagram_config_with_max_message_size() {
+        let config = InstagramConfig::new().with_max_message_size(5 * 1024 * 1024);
+        assert_eq!(config.max_message_size, 5 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_instagram_config_with_fix_encoding() {
+        let config = InstagramConfig::new().with_fix_encoding(false);
+        assert!(!config.fix_encoding);
+    }
+
+    #[test]
+    fn test_instagram_config_with_skip_invalid() {
+        let config = InstagramConfig::new().with_skip_invalid(false);
+        assert!(!config.skip_invalid);
+    }
+
+    #[test]
+    fn test_instagram_config_builder_chain() {
+        let config = InstagramConfig::new()
+            .with_streaming(true)
+            .with_buffer_size(512 * 1024)
+            .with_max_message_size(20 * 1024 * 1024)
+            .with_fix_encoding(false)
+            .with_skip_invalid(false);
+
+        assert!(config.streaming);
+        assert_eq!(config.buffer_size, 512 * 1024);
+        assert_eq!(config.max_message_size, 20 * 1024 * 1024);
+        assert!(!config.fix_encoding);
+        assert!(!config.skip_invalid);
+    }
+
+    #[test]
+    fn test_instagram_config_serde() {
+        let config = InstagramConfig::new().with_fix_encoding(false);
+        let json = serde_json::to_string(&config).expect("serialize failed");
+        let parsed: InstagramConfig = serde_json::from_str(&json).expect("deserialize failed");
+        assert!(!parsed.fix_encoding);
+    }
+
+    // =========================================================================
+    // DiscordConfig tests
+    // =========================================================================
+
+    #[test]
     fn test_discord_config_default() {
         let config = DiscordConfig::default();
         assert!(!config.streaming);
+        assert_eq!(config.buffer_size, 64 * 1024);
+        assert_eq!(config.max_message_size, 10 * 1024 * 1024);
         assert!(config.prefer_nickname);
         assert!(config.include_attachments);
+        assert!(config.skip_invalid);
+    }
+
+    #[test]
+    fn test_discord_config_new() {
+        let config = DiscordConfig::new();
+        assert!(!config.streaming);
+        assert!(config.prefer_nickname);
+        assert!(config.include_attachments);
+    }
+
+    #[test]
+    fn test_discord_config_streaming() {
+        let config = DiscordConfig::streaming();
+        assert!(config.streaming);
+        assert_eq!(config.buffer_size, 256 * 1024);
+    }
+
+    #[test]
+    fn test_discord_config_with_streaming() {
+        let config = DiscordConfig::new().with_streaming(true);
+        assert!(config.streaming);
+    }
+
+    #[test]
+    fn test_discord_config_with_buffer_size() {
+        let config = DiscordConfig::new().with_buffer_size(128 * 1024);
+        assert_eq!(config.buffer_size, 128 * 1024);
+    }
+
+    #[test]
+    fn test_discord_config_with_max_message_size() {
+        let config = DiscordConfig::new().with_max_message_size(5 * 1024 * 1024);
+        assert_eq!(config.max_message_size, 5 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_discord_config_with_prefer_nickname() {
+        let config = DiscordConfig::new().with_prefer_nickname(false);
+        assert!(!config.prefer_nickname);
+    }
+
+    #[test]
+    fn test_discord_config_with_include_attachments() {
+        let config = DiscordConfig::new().with_include_attachments(false);
+        assert!(!config.include_attachments);
+    }
+
+    #[test]
+    fn test_discord_config_with_skip_invalid() {
+        let config = DiscordConfig::new().with_skip_invalid(false);
+        assert!(!config.skip_invalid);
+    }
+
+    #[test]
+    fn test_discord_config_builder_chain() {
+        let config = DiscordConfig::new()
+            .with_streaming(true)
+            .with_buffer_size(512 * 1024)
+            .with_max_message_size(20 * 1024 * 1024)
+            .with_prefer_nickname(false)
+            .with_include_attachments(false)
+            .with_skip_invalid(false);
+
+        assert!(config.streaming);
+        assert_eq!(config.buffer_size, 512 * 1024);
+        assert_eq!(config.max_message_size, 20 * 1024 * 1024);
+        assert!(!config.prefer_nickname);
+        assert!(!config.include_attachments);
+        assert!(!config.skip_invalid);
+    }
+
+    #[test]
+    fn test_discord_config_serde() {
+        let config = DiscordConfig::new()
+            .with_prefer_nickname(false)
+            .with_include_attachments(false);
+        let json = serde_json::to_string(&config).expect("serialize failed");
+        let parsed: DiscordConfig = serde_json::from_str(&json).expect("deserialize failed");
+        assert!(!parsed.prefer_nickname);
+        assert!(!parsed.include_attachments);
+    }
+
+    // =========================================================================
+    // Clone and Debug trait tests
+    // =========================================================================
+
+    #[test]
+    fn test_configs_clone() {
+        let telegram = TelegramConfig::new().with_streaming(true);
+        let telegram_clone = telegram.clone();
+        assert_eq!(telegram.streaming, telegram_clone.streaming);
+
+        let whatsapp = WhatsAppConfig::new().with_skip_system_messages(false);
+        let whatsapp_clone = whatsapp.clone();
+        assert_eq!(
+            whatsapp.skip_system_messages,
+            whatsapp_clone.skip_system_messages
+        );
+
+        let instagram = InstagramConfig::new().with_fix_encoding(false);
+        let instagram_clone = instagram.clone();
+        assert_eq!(instagram.fix_encoding, instagram_clone.fix_encoding);
+
+        let discord = DiscordConfig::new().with_prefer_nickname(false);
+        let discord_clone = discord.clone();
+        assert_eq!(discord.prefer_nickname, discord_clone.prefer_nickname);
+    }
+
+    #[test]
+    fn test_configs_debug() {
+        let telegram = TelegramConfig::new();
+        let debug_str = format!("{:?}", telegram);
+        assert!(debug_str.contains("TelegramConfig"));
+        assert!(debug_str.contains("streaming"));
+
+        let whatsapp = WhatsAppConfig::new();
+        let debug_str = format!("{:?}", whatsapp);
+        assert!(debug_str.contains("WhatsAppConfig"));
+
+        let instagram = InstagramConfig::new();
+        let debug_str = format!("{:?}", instagram);
+        assert!(debug_str.contains("InstagramConfig"));
+
+        let discord = DiscordConfig::new();
+        let debug_str = format!("{:?}", discord);
+        assert!(debug_str.contains("DiscordConfig"));
     }
 }
