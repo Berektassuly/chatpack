@@ -809,7 +809,8 @@ mod tests {
     #[test]
     fn test_parse_txt_with_attachments() {
         let parser = DiscordParser::new();
-        let txt = "[1/15/2024 10:30 AM] alice\nMessage\n{Attachments}\nhttps://cdn.discord.com/image.png";
+        let txt =
+            "[1/15/2024 10:30 AM] alice\nMessage\n{Attachments}\nhttps://cdn.discord.com/image.png";
 
         let messages = parser.parse_txt(txt).unwrap();
         assert_eq!(messages.len(), 1);
@@ -887,7 +888,8 @@ mod tests {
     #[test]
     fn test_parse_str_csv() {
         let parser = DiscordParser::new();
-        let csv = "AuthorID,Author,Date,Content,Attachments\n123,alice,2024-01-15T10:30:00+00:00,Hello,";
+        let csv =
+            "AuthorID,Author,Date,Content,Attachments\n123,alice,2024-01-15T10:30:00+00:00,Hello,";
 
         let messages = Parser::parse_str(&parser, csv).unwrap();
         assert_eq!(messages.len(), 1);

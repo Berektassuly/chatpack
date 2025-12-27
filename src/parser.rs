@@ -589,7 +589,7 @@ mod tests {
     fn test_platform_clone_copy() {
         let p1 = Platform::Telegram;
         let p2 = p1; // Copy
-        let p3 = p1.clone();
+        let p3 = p1;
         assert_eq!(p1, p2);
         assert_eq!(p1, p3);
     }
@@ -726,11 +726,11 @@ mod tests {
         let file_path = dir.path().join("test.json");
         let mut file = std::fs::File::create(&file_path).expect("create file");
         // Streaming parser needs newlines for line-by-line reading
-        writeln!(file, r#"{{"#).expect("write");
+        writeln!(file, r"{{").expect("write");
         writeln!(file, r#"  "messages": ["#).expect("write");
         writeln!(file, r#"    {{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Charlie", "text": "Hello"}}"#).expect("write");
-        writeln!(file, r#"  ]"#).expect("write");
-        writeln!(file, r#"}}"#).expect("write");
+        writeln!(file, r"  ]").expect("write");
+        writeln!(file, r"}}").expect("write");
         file.flush().expect("flush");
         drop(file);
 
@@ -770,34 +770,36 @@ mod tests {
     #[cfg(all(feature = "telegram", feature = "streaming"))]
     #[test]
     fn test_parse_iterator_wrapper() {
-        use std::io::Write;
-        use crate::streaming::TelegramStreamingParser;
         use crate::streaming::StreamingParser;
+        use crate::streaming::TelegramStreamingParser;
+        use std::io::Write;
 
         let dir = tempfile::tempdir().expect("create temp dir");
         let file_path = dir.path().join("test.json");
         let mut file = std::fs::File::create(&file_path).expect("create file");
-        writeln!(file, r#"{{"#).expect("write");
+        writeln!(file, r"{{").expect("write");
         writeln!(file, r#"  "messages": ["#).expect("write");
         writeln!(file, r#"    {{"id": 1, "type": "message", "date_unixtime": "1234567890", "from": "Alice", "text": "Hello"}}"#).expect("write");
-        writeln!(file, r#"  ]"#).expect("write");
-        writeln!(file, r#"}}"#).expect("write");
+        writeln!(file, r"  ]").expect("write");
+        writeln!(file, r"}}").expect("write");
         file.flush().expect("flush");
         drop(file);
 
         let streaming_parser = TelegramStreamingParser::new();
-        let inner = streaming_parser.stream(file_path.to_str().unwrap()).expect("stream failed");
+        let inner = streaming_parser
+            .stream(file_path.to_str().unwrap())
+            .expect("stream failed");
 
         let mut parse_iter = ParseIterator::new(inner);
 
         // Test progress methods
         assert!(parse_iter.progress().is_some() || parse_iter.progress().is_none());
-        assert!(parse_iter.bytes_processed() >= 0);
         assert!(parse_iter.total_bytes().is_some());
 
         // Test iterator
-        let msg = parse_iter.next().expect("should have message").expect("parse ok");
+        let msg = parse_iter.next().unwrap().expect("should parse");
         assert_eq!(msg.sender, "Alice");
+        assert!(parse_iter.next().is_none());
     }
 
     #[cfg(feature = "telegram")]

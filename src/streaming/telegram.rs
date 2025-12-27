@@ -374,8 +374,7 @@ mod tests {
         let cursor = Cursor::new(json.as_bytes().to_vec());
         let reader = BufReader::new(cursor);
 
-        let iterator =
-            TelegramMessageIterator::new(reader, 0, StreamingConfig::default()).unwrap();
+        let iterator = TelegramMessageIterator::new(reader, 0, StreamingConfig::default()).unwrap();
 
         assert!(iterator.progress().is_none());
     }
@@ -446,8 +445,7 @@ mod tests {
         let reader = BufReader::new(cursor);
 
         let config = StreamingConfig::default().with_skip_invalid(true);
-        let mut iterator =
-            TelegramMessageIterator::new(reader, json.len() as u64, config).unwrap();
+        let mut iterator = TelegramMessageIterator::new(reader, json.len() as u64, config).unwrap();
 
         let messages: Vec<_> = iterator.by_ref().filter_map(Result::ok).collect();
 
@@ -468,8 +466,7 @@ mod tests {
         let reader = BufReader::new(cursor);
 
         let config = StreamingConfig::default().with_skip_invalid(false);
-        let mut iterator =
-            TelegramMessageIterator::new(reader, json.len() as u64, config).unwrap();
+        let mut iterator = TelegramMessageIterator::new(reader, json.len() as u64, config).unwrap();
 
         // First message should be an error
         let first = iterator.next();
