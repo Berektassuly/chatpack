@@ -16,8 +16,8 @@ use std::path::Path;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
 
-use crate::error::ChatpackError;
 use crate::Message;
+use crate::error::ChatpackError;
 
 use super::{MessageIterator, StreamingConfig, StreamingParser, StreamingResult};
 

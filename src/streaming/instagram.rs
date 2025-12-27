@@ -21,8 +21,8 @@ use std::path::Path;
 use chrono::{TimeZone, Utc};
 use serde::Deserialize;
 
-use crate::error::ChatpackError;
 use crate::Message;
+use crate::error::ChatpackError;
 
 use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
 

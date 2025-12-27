@@ -22,8 +22,8 @@ use chrono::DateTime;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::error::ChatpackError;
 use crate::Message;
+use crate::error::ChatpackError;
 
 use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
 

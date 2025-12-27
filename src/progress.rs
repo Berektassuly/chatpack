@@ -123,7 +123,8 @@ impl Progress {
     ///
     /// Returns `None` if total bytes is not known.
     pub fn remaining_bytes(&self) -> Option<u64> {
-        self.total_bytes.map(|total| total.saturating_sub(self.bytes_processed))
+        self.total_bytes
+            .map(|total| total.saturating_sub(self.bytes_processed))
     }
 }
 

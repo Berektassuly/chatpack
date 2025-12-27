@@ -13,7 +13,7 @@ use chatpack::core::{
     FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive,
 };
 use chatpack::format::{OutputFormat, write_to_format};
-use chatpack::parser::{create_parser, create_streaming_parser, Platform};
+use chatpack::parser::{Platform, create_parser, create_streaming_parser};
 use chatpack::{ChatpackError, Message};
 
 fn main() {
@@ -157,9 +157,7 @@ fn run() -> Result<(), ChatpackError> {
 }
 
 /// Parse using regular (in-memory) parser
-fn parse_regular(
-    args: &Args,
-) -> Result<(Vec<Message>, usize, std::time::Duration), ChatpackError> {
+fn parse_regular(args: &Args) -> Result<(Vec<Message>, usize, std::time::Duration), ChatpackError> {
     let platform: Platform = args.source.into();
     let parser = create_parser(platform);
     println!("⏳ Parsing {}...", parser.name());
@@ -179,7 +177,10 @@ fn parse_streaming(
     println!("⏳ Streaming {}...", parser.name());
     let parse_start = Instant::now();
 
-    let messages: Vec<_> = parser.stream(Path::new(&args.input))?.filter_map(Result::ok).collect();
+    let messages: Vec<_> = parser
+        .stream(Path::new(&args.input))?
+        .filter_map(Result::ok)
+        .collect();
 
     let count = messages.len();
     Ok((messages, count, parse_start.elapsed()))

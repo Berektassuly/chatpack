@@ -25,8 +25,8 @@
 
 use chrono::{DateTime, NaiveDate, Utc};
 
-use crate::error::ChatpackError;
 use crate::Message;
+use crate::error::ChatpackError;
 
 /// Configuration for filtering messages.
 ///
@@ -322,10 +322,7 @@ mod tests {
     fn test_invalid_date_format() {
         let result = FilterConfig::new().after_date("01-01-2024");
         assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(ChatpackError::InvalidDate { .. })
-        ));
+        assert!(matches!(result, Err(ChatpackError::InvalidDate { .. })));
     }
 
     #[test]

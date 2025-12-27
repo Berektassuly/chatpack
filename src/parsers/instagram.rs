@@ -14,10 +14,10 @@ use serde::Deserialize;
 
 #[allow(deprecated)]
 use super::ChatParser;
+use crate::Message;
 use crate::config::InstagramConfig;
 use crate::error::ChatpackError;
 use crate::parser::{Parser, Platform};
-use crate::Message;
 
 #[cfg(feature = "streaming")]
 use crate::streaming::{InstagramStreamingParser, StreamingConfig, StreamingParser};
@@ -175,9 +175,12 @@ impl Parser for InstagramParser {
                 .with_skip_invalid(self.config.skip_invalid);
 
             let streaming_parser = InstagramStreamingParser::with_config(streaming_config);
-            let iterator = StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
+            let iterator =
+                StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
 
-            Ok(Box::new(iterator.map(|result| result.map_err(ChatpackError::from))))
+            Ok(Box::new(
+                iterator.map(|result| result.map_err(ChatpackError::from)),
+            ))
         } else {
             // Fallback: load everything into memory
             let messages = Parser::parse(self, path)?;

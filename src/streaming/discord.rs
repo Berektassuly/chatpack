@@ -9,8 +9,8 @@ use std::path::Path;
 use chrono::DateTime;
 use serde::Deserialize;
 
-use crate::error::ChatpackError;
 use crate::Message;
+use crate::error::ChatpackError;
 
 use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
 
