@@ -2,18 +2,18 @@
 //!
 //! Command-line interface for chatpack library.
 
+use std::path::Path;
 use std::process;
 use std::time::Instant;
 
-use clap::Parser;
+use clap::Parser as ClapParser;
 
 use chatpack::cli::{Args, OutputFormat};
 use chatpack::core::{
     FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive, write_csv,
     write_json, write_jsonl,
 };
-use chatpack::parsers::create_parser;
-use chatpack::streaming::create_streaming_parser;
+use chatpack::parser::{create_parser, create_streaming_parser, Platform};
 use chatpack::{ChatpackError, Message};
 
 fn main() {
@@ -25,7 +25,7 @@ fn main() {
 
 fn run() -> Result<(), ChatpackError> {
     let total_start = Instant::now();
-    let args = Args::parse();
+    let args = <Args as ClapParser>::parse();
 
     // Determine output extension based on format
     let output_path = adjust_output_extension(&args.output, args.format);
@@ -163,10 +163,11 @@ fn run() -> Result<(), ChatpackError> {
 fn parse_regular(
     args: &Args,
 ) -> Result<(Vec<Message>, usize, std::time::Duration), ChatpackError> {
-    let parser = create_parser(args.source);
+    let platform: Platform = args.source.into();
+    let parser = create_parser(platform);
     println!("⏳ Parsing {}...", parser.name());
     let parse_start = Instant::now();
-    let messages = parser.parse(&args.input)?;
+    let messages = parser.parse(Path::new(&args.input))?;
     let count = messages.len();
     Ok((messages, count, parse_start.elapsed()))
 }
@@ -175,17 +176,13 @@ fn parse_regular(
 fn parse_streaming(
     args: &Args,
 ) -> Result<(Vec<Message>, usize, std::time::Duration), ChatpackError> {
-    let parser = create_streaming_parser(args.source).ok_or_else(|| {
-        ChatpackError::InvalidFormat {
-            format: "streaming",
-            message: format!("Streaming not supported for {}", args.source),
-        }
-    })?;
+    let platform: Platform = args.source.into();
+    let parser = create_streaming_parser(platform);
 
     println!("⏳ Streaming {}...", parser.name());
     let parse_start = Instant::now();
 
-    let messages: Vec<_> = parser.stream(&args.input)?.filter_map(Result::ok).collect();
+    let messages: Vec<_> = parser.stream(Path::new(&args.input))?.filter_map(Result::ok).collect();
 
     let count = messages.len();
     Ok((messages, count, parse_start.elapsed()))

@@ -10,20 +10,58 @@
 //! - RU: `15.01.2024, 10:30 - Sender: Message`
 
 use std::fs;
+use std::path::Path;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
 
+#[allow(deprecated)]
 use super::ChatParser;
+use crate::config::WhatsAppConfig;
 use crate::error::ChatpackError;
+use crate::parser::{Parser, Platform};
+use crate::streaming::{StreamingConfig, StreamingParser, WhatsAppStreamingParser};
 use crate::Message;
 
 /// Parser for WhatsApp TXT exports.
-pub struct WhatsAppParser;
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use chatpack::parsers::WhatsAppParser;
+/// use chatpack::parser::Parser;
+///
+/// let parser = WhatsAppParser::new();
+/// let messages = parser.parse("whatsapp_chat.txt".as_ref())?;
+/// # Ok::<(), chatpack::ChatpackError>(())
+/// ```
+pub struct WhatsAppParser {
+    config: WhatsAppConfig,
+}
 
 impl WhatsAppParser {
+    /// Creates a new parser with default configuration.
     pub fn new() -> Self {
-        Self
+        Self {
+            config: WhatsAppConfig::default(),
+        }
+    }
+
+    /// Creates a parser with custom configuration.
+    pub fn with_config(config: WhatsAppConfig) -> Self {
+        Self { config }
+    }
+
+    /// Creates a parser optimized for streaming large files.
+    pub fn with_streaming() -> Self {
+        Self {
+            config: WhatsAppConfig::streaming(),
+        }
+    }
+
+    /// Returns the current configuration.
+    pub fn config(&self) -> &WhatsAppConfig {
+        &self.config
     }
 }
 
@@ -244,17 +282,9 @@ fn parse_timestamp(date_str: &str, time_str: &str, format: DateFormat) -> Option
     None
 }
 
-impl ChatParser for WhatsAppParser {
-    fn name(&self) -> &'static str {
-        "WhatsApp"
-    }
-
-    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
-        let content = fs::read_to_string(file_path)?;
-        self.parse_str(&content)
-    }
-
-    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+impl WhatsAppParser {
+    /// Parses content from a string (internal implementation).
+    fn parse_content(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let lines: Vec<&str> = content.lines().collect();
 
         if lines.is_empty() {
@@ -290,8 +320,8 @@ impl ChatParser for WhatsAppParser {
                 let sender = caps.get(3).map_or("", |m| m.as_str().trim());
                 let msg_content = caps.get(4).map_or("", |m| m.as_str());
 
-                // Skip system messages
-                if is_system_message(sender, msg_content) {
+                // Skip system messages (if configured)
+                if self.config.skip_system_messages && is_system_message(sender, msg_content) {
                     continue;
                 }
 
@@ -321,6 +351,73 @@ impl ChatParser for WhatsAppParser {
     }
 }
 
+// Implement the new unified Parser trait
+impl Parser for WhatsAppParser {
+    fn name(&self) -> &'static str {
+        "WhatsApp"
+    }
+
+    fn platform(&self) -> Platform {
+        Platform::WhatsApp
+    }
+
+    fn parse(&self, path: &Path) -> Result<Vec<Message>, ChatpackError> {
+        let content = fs::read_to_string(path)?;
+        self.parse_content(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_content(content)
+    }
+
+    fn stream(
+        &self,
+        path: &Path,
+    ) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError>
+    {
+        if self.config.streaming {
+            // Use native streaming parser
+            let streaming_config = StreamingConfig::new()
+                .with_buffer_size(self.config.buffer_size)
+                .with_skip_invalid(self.config.skip_invalid);
+
+            let streaming_parser = WhatsAppStreamingParser::with_config(streaming_config);
+            let iterator = StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
+
+            Ok(Box::new(iterator.map(|result| result.map_err(ChatpackError::from))))
+        } else {
+            // Fallback: load everything into memory
+            let messages = Parser::parse(self, path)?;
+            Ok(Box::new(messages.into_iter().map(Ok)))
+        }
+    }
+
+    fn supports_streaming(&self) -> bool {
+        self.config.streaming
+    }
+
+    fn recommended_buffer_size(&self) -> usize {
+        self.config.buffer_size
+    }
+}
+
+// Keep backward compatibility with ChatParser trait
+#[allow(deprecated)]
+impl ChatParser for WhatsAppParser {
+    fn name(&self) -> &'static str {
+        "WhatsApp"
+    }
+
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
+        let content = fs::read_to_string(file_path)?;
+        self.parse_content(&content)
+    }
+
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        self.parse_content(content)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -328,7 +425,7 @@ mod tests {
     #[test]
     fn test_parser_name() {
         let parser = WhatsAppParser::new();
-        assert_eq!(parser.name(), "WhatsApp");
+        assert_eq!(Parser::name(&parser), "WhatsApp");
     }
 
     #[test]
