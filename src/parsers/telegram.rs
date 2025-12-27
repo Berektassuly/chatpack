@@ -7,8 +7,6 @@ use chrono::DateTime;
 use serde::Deserialize;
 use serde_json::Value;
 
-#[allow(deprecated)]
-use super::ChatParser;
 use crate::Message;
 use crate::config::TelegramConfig;
 use crate::error::ChatpackError;
@@ -211,23 +209,6 @@ impl Parser for TelegramParser {
     #[cfg(feature = "streaming")]
     fn recommended_buffer_size(&self) -> usize {
         self.config.buffer_size
-    }
-}
-
-// Keep backward compatibility with ChatParser trait
-#[allow(deprecated)]
-impl ChatParser for TelegramParser {
-    fn name(&self) -> &'static str {
-        "Telegram"
-    }
-
-    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
-        let content = fs::read_to_string(file_path)?;
-        self.parse_content(&content)
-    }
-
-    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
-        self.parse_content(content)
     }
 }
 

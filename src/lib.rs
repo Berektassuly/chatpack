@@ -6,10 +6,10 @@
 //! ## Overview
 //!
 //! Chatpack provides a unified API for working with chat exports from:
-//! - **Telegram** — JSON exports from Telegram Desktop
-//! - **WhatsApp** — Text exports (both iOS and Android formats)
-//! - **Instagram** — JSON exports from Instagram data download
-//! - **Discord** — JSON/TXT/CSV exports from DiscordChatExporter
+//! - **Telegram** - JSON exports from Telegram Desktop
+//! - **WhatsApp** - Text exports (both iOS and Android formats)
+//! - **Instagram** - JSON exports from Instagram data download
+//! - **Discord** - JSON/TXT/CSV exports from DiscordChatExporter
 //!
 //! The library handles the complexity of different export formats and provides
 //! tools for filtering, merging, and outputting messages in formats optimized
@@ -28,12 +28,11 @@
 //! | `csv-output` | CSV output writer | `csv` |
 //! | `json-output` | JSON/JSONL output writers | `serde_json` |
 //! | `streaming` | Streaming parsers for large files | (none) |
-//! | `cli` | CLI support | `clap` |
 //! | `full` | Everything (default) | all above |
 //!
-//! ## Quick Start (New Unified API)
+//! ## Quick Start
 //!
-//! The new [`parser`] module provides a unified API with streaming support:
+//! The [`parser`] module provides a unified API with streaming support:
 //!
 //! ```rust,no_run
 //! # #[cfg(all(feature = "telegram", feature = "json-output"))]
@@ -82,32 +81,27 @@
 //!
 //! ## Module Structure
 //!
-//! - [`parser`] — **New unified parser API** (recommended)
-//!   - [`Parser`](parser::Parser) — Unified parser trait with streaming
-//!   - [`Platform`](parser::Platform) — Supported platforms enum
+//! - [`parser`] - **Unified parser API** (recommended)
+//!   - [`Parser`](parser::Parser) - Unified parser trait with streaming
+//!   - [`Platform`](parser::Platform) - Supported platforms enum
 //!   - [`create_parser`](parser::create_parser), [`create_streaming_parser`](parser::create_streaming_parser)
-//! - [`config`] — Parser configuration types
+//! - [`config`] - Parser configuration types
 //!   - [`TelegramConfig`](config::TelegramConfig), [`WhatsAppConfig`](config::WhatsAppConfig), etc.
-//! - [`core`] — Core types and functionality
-//!   - [`core::models`] — [`InternalMessage`] (deprecated, use [`Message`]), [`OutputConfig`]
-//!   - [`core::filter`] — [`FilterConfig`], [`apply_filters`]
-//!   - [`core::processor`] — [`merge_consecutive`], [`ProcessingStats`]
-//!   - [`core::output`] — [`write_json`], [`write_jsonl`], [`write_csv`]
-//! - [`parsers`] — Chat parsers (legacy + new API)
+//! - [`core`] - Core types and functionality
+//!   - [`core::models`] - [`InternalMessage`], [`OutputConfig`]
+//!   - [`core::filter`] - [`FilterConfig`], [`apply_filters`]
+//!   - [`core::processor`] - [`merge_consecutive`], [`ProcessingStats`]
+//!   - [`core::output`] - [`write_json`], [`write_jsonl`], [`write_csv`]
+//! - [`parsers`] - Platform-specific parser implementations
 //!   - [`TelegramParser`], [`WhatsAppParser`], [`InstagramParser`], [`DiscordParser`]
-//! - [`streaming`] — Streaming parsers for large files (requires `streaming` feature)
+//! - [`streaming`] - Streaming parsers for large files (requires `streaming` feature)
 //!   - [`TelegramStreamingParser`], [`DiscordStreamingParser`]
-//! - [`format`] — Library-first output format types (no CLI dependencies)
+//! - [`format`] - Output format types
 //!   - [`OutputFormat`](format::OutputFormat), [`write_to_format`](format::write_to_format)
-//! - [`progress`] — Progress reporting for long-running operations
+//! - [`progress`] - Progress reporting for long-running operations
 //!   - [`Progress`](progress::Progress), [`ProgressCallback`](progress::ProgressCallback)
-//! - [`cli`] — CLI types (requires `cli` feature)
-//! - [`error`] — Unified error types ([`ChatpackError`], [`Result`])
-//! - [`prelude`] — Convenient re-exports
-
-// CLI module (requires clap)
-#[cfg(feature = "cli")]
-pub mod cli;
+//! - [`error`] - Unified error types ([`ChatpackError`], [`Result`])
+//! - [`prelude`] - Convenient re-exports
 
 // Core modules (always available)
 pub mod config;
@@ -157,7 +151,6 @@ pub use message::Message;
 /// ```rust
 /// use chatpack::prelude::*;
 /// ```
-#[allow(deprecated)]
 pub mod prelude {
     // Core message type
     pub use crate::Message;
@@ -172,12 +165,12 @@ pub mod prelude {
         feature = "instagram",
         feature = "discord"
     ))]
-    pub use crate::parser::{Parser, Platform};
+    pub use crate::parser::{Parser, Platform, create_parser, create_streaming_parser};
 
     // Platform configs
     pub use crate::config::{DiscordConfig, InstagramConfig, TelegramConfig, WhatsAppConfig};
 
-    // Models (with backward-compatible alias)
+    // Models
     pub use crate::core::models::{InternalMessage, OutputConfig};
 
     // Filtering
@@ -186,7 +179,7 @@ pub mod prelude {
     // Processing
     pub use crate::core::processor::{ProcessingStats, merge_consecutive};
 
-    // Output format (library-first, no CLI deps)
+    // Output format
     pub use crate::format::OutputFormat;
     #[cfg(any(feature = "csv-output", feature = "json-output"))]
     pub use crate::format::{to_format_string, write_to_format};
@@ -201,7 +194,7 @@ pub mod prelude {
     // Progress reporting
     pub use crate::progress::{Progress, ProgressCallback, no_progress};
 
-    // Parsers (implement both Parser and legacy ChatParser traits)
+    // Parsers (implement Parser trait)
     #[cfg(feature = "telegram")]
     pub use crate::parsers::TelegramParser;
 
@@ -213,29 +206,4 @@ pub mod prelude {
 
     #[cfg(feature = "discord")]
     pub use crate::parsers::DiscordParser;
-
-    // Legacy parser trait (deprecated) - only available with parsers
-    #[cfg(any(
-        feature = "telegram",
-        feature = "whatsapp",
-        feature = "instagram",
-        feature = "discord"
-    ))]
-    pub use crate::parsers::ChatParser;
-
-    // Legacy create_parser (requires cli feature for Source type)
-    #[cfg(all(
-        feature = "cli",
-        any(
-            feature = "telegram",
-            feature = "whatsapp",
-            feature = "instagram",
-            feature = "discord"
-        )
-    ))]
-    pub use crate::parsers::create_parser;
-
-    // CLI types (Source only - OutputFormat is already exported from format module)
-    #[cfg(feature = "cli")]
-    pub use crate::cli::Source;
 }

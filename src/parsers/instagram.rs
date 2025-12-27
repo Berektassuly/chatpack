@@ -12,8 +12,6 @@ use std::path::Path;
 use chrono::{TimeZone, Utc};
 use serde::Deserialize;
 
-#[allow(deprecated)]
-use super::ChatParser;
 use crate::Message;
 use crate::config::InstagramConfig;
 use crate::error::ChatpackError;
@@ -196,22 +194,5 @@ impl Parser for InstagramParser {
     #[cfg(feature = "streaming")]
     fn recommended_buffer_size(&self) -> usize {
         self.config.buffer_size
-    }
-}
-
-// Keep backward compatibility with ChatParser trait
-#[allow(deprecated)]
-impl ChatParser for InstagramParser {
-    fn name(&self) -> &'static str {
-        "Instagram"
-    }
-
-    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
-        let content = fs::read_to_string(file_path)?;
-        self.parse_content(&content)
-    }
-
-    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
-        self.parse_content(content)
     }
 }

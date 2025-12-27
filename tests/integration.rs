@@ -825,37 +825,43 @@ mod message_tests {
 }
 
 // ============================================================================
-// CLI Types Tests
+// Platform and Format Types Tests
 // ============================================================================
 
-mod cli_tests {
+mod platform_tests {
     use super::*;
     use std::str::FromStr;
 
     #[test]
-    fn test_source_from_str_aliases() {
-        assert_eq!(Source::from_str("tg").unwrap(), Source::Telegram);
-        assert_eq!(Source::from_str("wa").unwrap(), Source::WhatsApp);
-        assert_eq!(Source::from_str("ig").unwrap(), Source::Instagram);
-        assert_eq!(Source::from_str("dc").unwrap(), Source::Discord);
-        assert_eq!(Source::from_str("telegram").unwrap(), Source::Telegram);
-        assert_eq!(Source::from_str("whatsapp").unwrap(), Source::WhatsApp);
-        assert_eq!(Source::from_str("instagram").unwrap(), Source::Instagram);
-        assert_eq!(Source::from_str("discord").unwrap(), Source::Discord);
+    fn test_platform_from_str_aliases() {
+        assert_eq!(Platform::from_str("tg").unwrap(), Platform::Telegram);
+        assert_eq!(Platform::from_str("wa").unwrap(), Platform::WhatsApp);
+        assert_eq!(Platform::from_str("ig").unwrap(), Platform::Instagram);
+        assert_eq!(Platform::from_str("dc").unwrap(), Platform::Discord);
+        assert_eq!(Platform::from_str("telegram").unwrap(), Platform::Telegram);
+        assert_eq!(Platform::from_str("whatsapp").unwrap(), Platform::WhatsApp);
+        assert_eq!(
+            Platform::from_str("instagram").unwrap(),
+            Platform::Instagram
+        );
+        assert_eq!(Platform::from_str("discord").unwrap(), Platform::Discord);
     }
 
     #[test]
-    fn test_source_from_str_case_insensitive() {
-        assert_eq!(Source::from_str("TELEGRAM").unwrap(), Source::Telegram);
-        assert_eq!(Source::from_str("WhatsApp").unwrap(), Source::WhatsApp);
-        assert_eq!(Source::from_str("INSTAGRAM").unwrap(), Source::Instagram);
-        assert_eq!(Source::from_str("DISCORD").unwrap(), Source::Discord);
+    fn test_platform_from_str_case_insensitive() {
+        assert_eq!(Platform::from_str("TELEGRAM").unwrap(), Platform::Telegram);
+        assert_eq!(Platform::from_str("WhatsApp").unwrap(), Platform::WhatsApp);
+        assert_eq!(
+            Platform::from_str("INSTAGRAM").unwrap(),
+            Platform::Instagram
+        );
+        assert_eq!(Platform::from_str("DISCORD").unwrap(), Platform::Discord);
     }
 
     #[test]
-    fn test_source_from_str_error() {
-        assert!(Source::from_str("unknown").is_err());
-        assert!(Source::from_str("").is_err());
+    fn test_platform_from_str_error() {
+        assert!(Platform::from_str("unknown").is_err());
+        assert!(Platform::from_str("").is_err());
     }
 
     #[test]
@@ -874,11 +880,11 @@ mod cli_tests {
     }
 
     #[test]
-    fn test_source_default_extension() {
-        assert_eq!(Source::Telegram.default_extension(), "json");
-        assert_eq!(Source::WhatsApp.default_extension(), "txt");
-        assert_eq!(Source::Instagram.default_extension(), "json");
-        assert_eq!(Source::Discord.default_extension(), "json");
+    fn test_platform_default_extension() {
+        assert_eq!(Platform::Telegram.default_extension(), "json");
+        assert_eq!(Platform::WhatsApp.default_extension(), "txt");
+        assert_eq!(Platform::Instagram.default_extension(), "json");
+        assert_eq!(Platform::Discord.default_extension(), "json");
     }
 
     #[test]
@@ -896,8 +902,8 @@ mod cli_tests {
     }
 
     #[test]
-    fn test_source_all_names() {
-        let names = Source::all_names();
+    fn test_platform_all_names() {
+        let names = Platform::all_names();
         assert!(names.contains(&"telegram"));
         assert!(names.contains(&"whatsapp"));
         assert!(names.contains(&"instagram"));
@@ -913,11 +919,11 @@ mod cli_tests {
     }
 
     #[test]
-    fn test_source_display() {
-        assert_eq!(format!("{}", Source::Telegram), "Telegram");
-        assert_eq!(format!("{}", Source::WhatsApp), "WhatsApp");
-        assert_eq!(format!("{}", Source::Instagram), "Instagram");
-        assert_eq!(format!("{}", Source::Discord), "Discord");
+    fn test_platform_display() {
+        assert_eq!(format!("{}", Platform::Telegram), "Telegram");
+        assert_eq!(format!("{}", Platform::WhatsApp), "WhatsApp");
+        assert_eq!(format!("{}", Platform::Instagram), "Instagram");
+        assert_eq!(format!("{}", Platform::Discord), "Discord");
     }
 }
 
@@ -984,12 +990,12 @@ mod serde_tests {
     }
 
     #[test]
-    fn test_source_serde() {
-        let source = Source::Telegram;
-        let json = serde_json::to_string(&source).unwrap();
-        let deserialized: Source = serde_json::from_str(&json).unwrap();
+    fn test_platform_serde() {
+        let platform = Platform::Telegram;
+        let json = serde_json::to_string(&platform).unwrap();
+        let deserialized: Platform = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(source, deserialized);
+        assert_eq!(platform, deserialized);
     }
 
     #[test]
