@@ -9,39 +9,6 @@
 //! - **Library users** get typed errors they can match on
 //! - **Application users** get clear, actionable error messages
 //! - **Developers** get source error chains for debugging
-//!
-//! # Example
-//!
-//! ```rust
-//! use chatpack::error::{ChatpackError, Result};
-//! use chatpack::parsers::create_parser;
-//! use chatpack::cli::Source;
-//!
-//! fn process_chat(path: &str) -> Result<()> {
-//!     let parser = create_parser(Source::Telegram);
-//!     let messages = parser.parse(path)?;
-//!
-//!     // Handle specific errors
-//!     // match result {
-//!     //     Err(ChatpackError::Io(e)) => eprintln!("File error: {}", e),
-//!     //     Err(ChatpackError::Parse { source, .. }) => eprintln!("Parse error: {}", source),
-//!     //     _ => {}
-//!     // }
-//!
-//!     Ok(())
-//! }
-//! ```
-//!
-//! # Error Categories
-//!
-//! | Category | When it occurs |
-//! |----------|----------------|
-//! | [`Io`](ChatpackError::Io) | File operations fail |
-//! | [`Parse`](ChatpackError::Parse) | JSON/format parsing fails |
-//! | [`InvalidFormat`](ChatpackError::InvalidFormat) | File structure doesn't match expected format |
-//! | [`InvalidDate`](ChatpackError::InvalidDate) | Date filter has wrong format |
-//! | [`Csv`](ChatpackError::Csv) | CSV writing fails |
-//! | [`Streaming`](ChatpackError::Streaming) | Streaming parser errors |
 
 use std::io;
 use std::path::PathBuf;
@@ -71,28 +38,6 @@ pub type Result<T> = std::result::Result<T, ChatpackError>;
 /// This enum represents all possible errors that can occur when using chatpack.
 /// Each variant contains context about what went wrong and, where applicable,
 /// the underlying source error.
-///
-/// # Matching on Errors
-///
-/// ```rust,ignore
-/// use chatpack::error::ChatpackError;
-///
-/// match error {
-///     ChatpackError::Io(e) => {
-///         eprintln!("IO error: {}", e);
-///     }
-///     ChatpackError::Parse { format, source, path } => {
-///         eprintln!("Failed to parse {} file: {}", format, source);
-///         if let Some(p) = path {
-///             eprintln!("  File: {}", p.display());
-///         }
-///     }
-///     ChatpackError::InvalidFormat { format, message } => {
-///         eprintln!("{} format error: {}", format, message);
-///     }
-///     _ => eprintln!("Error: {}", error),
-/// }
-/// ```
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ChatpackError {
@@ -148,12 +93,14 @@ pub enum ChatpackError {
     /// CSV writing error.
     ///
     /// This can occur when writing output to CSV format.
+    #[cfg(any(feature = "csv-output", feature = "discord"))]
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
 
     /// JSON parsing/serialization error.
     ///
     /// This can occur when parsing or writing JSON.
+    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord", feature = "json-output"))]
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
@@ -200,6 +147,7 @@ pub enum ChatpackError {
 #[derive(Debug, Error)]
 pub enum ParseErrorKind {
     /// JSON parsing error
+    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord", feature = "json-output"))]
     #[error("{0}")]
     Json(#[from] serde_json::Error),
     /// Regex/pattern matching error
@@ -217,6 +165,7 @@ pub enum StreamingErrorKind {
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
     /// JSON parsing error during streaming
+    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord", feature = "json-output"))]
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
     /// Invalid format encountered
@@ -248,6 +197,7 @@ impl From<std::string::FromUtf8Error> for ChatpackError {
 
 impl ChatpackError {
     /// Creates a parse error for Telegram format.
+    #[cfg(feature = "telegram")]
     pub fn telegram_parse(source: serde_json::Error, path: Option<PathBuf>) -> Self {
         ChatpackError::Parse {
             format: "Telegram JSON",
@@ -266,6 +216,7 @@ impl ChatpackError {
     }
 
     /// Creates a parse error for Instagram format.
+    #[cfg(feature = "instagram")]
     pub fn instagram_parse(source: serde_json::Error, path: Option<PathBuf>) -> Self {
         ChatpackError::Parse {
             format: "Instagram JSON",
@@ -275,6 +226,7 @@ impl ChatpackError {
     }
 
     /// Creates a parse error for Discord format.
+    #[cfg(feature = "discord")]
     pub fn discord_parse(source: serde_json::Error, path: Option<PathBuf>) -> Self {
         ChatpackError::Parse {
             format: "Discord",
@@ -344,12 +296,18 @@ impl ChatpackError {
 // Integration with streaming module
 // ============================================================================
 
+#[cfg(all(
+    feature = "streaming",
+    any(feature = "telegram", feature = "whatsapp", feature = "instagram", feature = "discord")
+))]
 impl From<crate::streaming::StreamingError> for ChatpackError {
+    #[allow(unreachable_patterns)]
     fn from(err: crate::streaming::StreamingError) -> Self {
         match err {
             crate::streaming::StreamingError::Io(e) => {
                 ChatpackError::Streaming(StreamingErrorKind::Io(e))
             }
+            #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord"))]
             crate::streaming::StreamingError::Json(e) => {
                 ChatpackError::Streaming(StreamingErrorKind::Json(e))
             }
@@ -366,6 +324,10 @@ impl From<crate::streaming::StreamingError> for ChatpackError {
             crate::streaming::StreamingError::UnexpectedEof => {
                 ChatpackError::Streaming(StreamingErrorKind::UnexpectedEof)
             }
+            // Catch-all for when Json variant is not available
+            _ => ChatpackError::Streaming(StreamingErrorKind::InvalidFormat(
+                "Unknown streaming error".to_string()
+            )),
         }
     }
 }
@@ -387,6 +349,7 @@ mod tests {
         assert!(display.contains("file not found"));
     }
 
+    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord", feature = "json-output"))]
     #[test]
     fn test_parse_error_with_path() {
         let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();

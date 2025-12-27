@@ -1,6 +1,6 @@
 //! Integration tests for streaming parsers.
 
-use chatpack::cli::Source;
+use chatpack::parser::Platform;
 use chatpack::streaming::{
     StreamingConfig, StreamingParser, TelegramStreamingParser, create_streaming_parser,
 };
@@ -38,10 +38,11 @@ fn create_telegram_test_file(count: usize) -> NamedTempFile {
 
 #[test]
 fn test_streaming_parser_factory() {
-    assert!(create_streaming_parser(Source::Telegram).is_some());
-    assert!(create_streaming_parser(Source::Discord).is_some());
-    assert!(create_streaming_parser(Source::WhatsApp).is_some());
-    assert!(create_streaming_parser(Source::Instagram).is_some());
+    // All platforms now return Box<dyn StreamingParser> directly
+    let _parser = create_streaming_parser(Platform::Telegram);
+    let _parser = create_streaming_parser(Platform::Discord);
+    let _parser = create_streaming_parser(Platform::WhatsApp);
+    let _parser = create_streaming_parser(Platform::Instagram);
 }
 
 #[test]
