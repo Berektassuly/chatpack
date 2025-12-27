@@ -439,9 +439,7 @@ mod tests {
     #[test]
     fn test_is_jsonl_with_messages_key() {
         // Should not be JSONL if contains "messages"
-        assert!(!DiscordStreamingParser::is_jsonl(
-            r#"{"messages":[]}"#
-        ));
+        assert!(!DiscordStreamingParser::is_jsonl(r#"{"messages":[]}"#));
     }
 
     #[test]
@@ -606,8 +604,7 @@ invalid json line"#;
         let cursor = Cursor::new(json.as_bytes().to_vec());
         let file_size = json.len() as u64;
         let config = StreamingConfig::default();
-        let iter = DiscordJsonIterator::new(cursor, file_size, config)
-            .expect("create iterator");
+        let iter = DiscordJsonIterator::new(cursor, file_size, config).expect("create iterator");
 
         let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
         assert_eq!(messages.len(), 2);
@@ -625,8 +622,7 @@ invalid json line"#;
         let cursor = Cursor::new(json.as_bytes().to_vec());
         let file_size = json.len() as u64;
         let config = StreamingConfig::default();
-        let iter = DiscordJsonIterator::new(cursor, file_size, config)
-            .expect("create iterator");
+        let iter = DiscordJsonIterator::new(cursor, file_size, config).expect("create iterator");
 
         let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
         assert_eq!(messages.len(), 2);
@@ -644,8 +640,7 @@ invalid json line"#;
         let cursor = Cursor::new(json.as_bytes().to_vec());
         let file_size = json.len() as u64;
         let config = StreamingConfig::default();
-        let iter = DiscordJsonIterator::new(cursor, file_size, config)
-            .expect("create iterator");
+        let iter = DiscordJsonIterator::new(cursor, file_size, config).expect("create iterator");
 
         let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
         assert_eq!(messages.len(), 2);
@@ -671,8 +666,7 @@ invalid json line"#;
         let cursor = Cursor::new(json.as_bytes().to_vec());
         let file_size = json.len() as u64;
         let config = StreamingConfig::default();
-        let iter = DiscordJsonIterator::new(cursor, file_size, config)
-            .expect("create iterator");
+        let iter = DiscordJsonIterator::new(cursor, file_size, config).expect("create iterator");
 
         assert_eq!(iter.total_bytes(), Some(file_size));
         assert!(iter.bytes_processed() > 0); // Header was read
@@ -684,8 +678,7 @@ invalid json line"#;
 
         let cursor = Cursor::new(json.as_bytes().to_vec());
         let config = StreamingConfig::default();
-        let iter = DiscordJsonIterator::new(cursor, 0, config)
-            .expect("create iterator");
+        let iter = DiscordJsonIterator::new(cursor, 0, config).expect("create iterator");
 
         assert!(iter.progress().is_none());
     }

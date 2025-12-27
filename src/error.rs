@@ -449,9 +449,8 @@ mod tests {
 
     #[test]
     fn test_streaming_error_display() {
-        let err = ChatpackError::Streaming(StreamingErrorKind::InvalidFormat(
-            "missing header".into(),
-        ));
+        let err =
+            ChatpackError::Streaming(StreamingErrorKind::InvalidFormat("missing header".into()));
         let display = err.to_string();
         assert!(display.contains("Streaming error"));
         assert!(display.contains("missing header"));
@@ -619,7 +618,7 @@ mod tests {
         }
         // If we reach here, force an error in a different way
         // The Csv variant just needs to be tested for From conversion
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test");
+        let io_err = std::io::Error::other("test");
         let csv_err = csv::Error::from(io_err);
         let err: ChatpackError = csv_err.into();
         assert!(err.to_string().contains("CSV error"));
@@ -738,14 +737,14 @@ mod tests {
             Err(ChatpackError::invalid_date("bad"))
         }
 
-        fn returns_ok() -> Result<i32> {
-            Ok(42)
+        fn returns_ok() -> i32 {
+            42
         }
 
         assert_eq!(returns_result(), 42);
         assert!(returns_error().is_err());
-        assert!(returns_ok().is_ok());
-        assert_eq!(returns_ok().unwrap(), 42);
+        assert_eq!(returns_ok(), 42);
+        assert_eq!(returns_ok(), 42);
     }
 
     // =========================================================================

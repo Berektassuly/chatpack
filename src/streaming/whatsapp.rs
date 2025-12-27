@@ -406,8 +406,7 @@ This is a continuation line
         let cursor = Cursor::new(txt.as_bytes().to_vec());
         let reader = BufReader::new(cursor);
 
-        let iterator =
-            WhatsAppMessageIterator::new(reader, 0, StreamingConfig::default()).unwrap();
+        let iterator = WhatsAppMessageIterator::new(reader, 0, StreamingConfig::default()).unwrap();
 
         assert!(iterator.progress().is_none());
     }

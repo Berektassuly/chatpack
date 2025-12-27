@@ -132,7 +132,9 @@ mod tests {
             ]
         }"#;
 
-        let mut file = tokio::fs::File::create(&file_path).await.expect("create file");
+        let mut file = tokio::fs::File::create(&file_path)
+            .await
+            .expect("create file");
         file.write_all(json.as_bytes()).await.expect("write");
         file.flush().await.expect("flush");
 

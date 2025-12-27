@@ -304,8 +304,14 @@ mod tests {
         );
         assert_eq!(OutputFormat::from_str("CSV").unwrap(), OutputFormat::Csv);
         assert_eq!(OutputFormat::from_str("JSON").unwrap(), OutputFormat::Json);
-        assert_eq!(OutputFormat::from_str("JSONL").unwrap(), OutputFormat::Jsonl);
-        assert_eq!(OutputFormat::from_str("NDJSON").unwrap(), OutputFormat::Jsonl);
+        assert_eq!(
+            OutputFormat::from_str("JSONL").unwrap(),
+            OutputFormat::Jsonl
+        );
+        assert_eq!(
+            OutputFormat::from_str("NDJSON").unwrap(),
+            OutputFormat::Jsonl
+        );
     }
 
     #[test]
@@ -460,7 +466,7 @@ mod tests {
     fn test_format_clone_copy() {
         let f1 = OutputFormat::Csv;
         let f2 = f1; // Copy
-        let f3 = f1.clone();
+        let f3 = f1;
         assert_eq!(f1, f2);
         assert_eq!(f1, f3);
     }

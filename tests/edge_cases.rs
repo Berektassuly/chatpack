@@ -3,10 +3,10 @@
 //! These tests cover various edge cases and boundary conditions
 //! that might not be covered by regular unit and integration tests.
 
+use chatpack::Message;
 use chatpack::core::filter::FilterConfig;
 use chatpack::core::models::OutputConfig;
 use chatpack::core::processor::merge_consecutive;
-use chatpack::Message;
 use chrono::{TimeZone, Utc};
 
 // =========================================================================
@@ -269,7 +269,7 @@ fn test_merge_all_same_sender() {
     assert_eq!(result[0].sender, "Alice");
     assert!(result[0].content.contains("Hello"));
     assert!(result[0].content.contains("World"));
-    assert!(result[0].content.contains("!"));
+    assert!(result[0].content.contains('!'));
 }
 
 #[test]
@@ -357,10 +357,10 @@ fn test_csv_escaping_special_chars() {
     use chatpack::core::output::to_csv;
 
     let messages = vec![
-        Message::new("Alice", "Hello, World"),    // Comma
-        Message::new("Bob", "Say \"Hi\""),        // Quotes
-        Message::new("Charlie", "Line1\nLine2"),  // Newline
-        Message::new("David", "Semi;colon"),      // Semicolon (delimiter)
+        Message::new("Alice", "Hello, World"),   // Comma
+        Message::new("Bob", "Say \"Hi\""),       // Quotes
+        Message::new("Charlie", "Line1\nLine2"), // Newline
+        Message::new("David", "Semi;colon"),     // Semicolon (delimiter)
     ];
 
     let config = OutputConfig::new();
@@ -402,10 +402,7 @@ fn test_json_escaping_special_chars() {
 fn test_jsonl_each_line_valid() {
     use chatpack::core::output::to_jsonl;
 
-    let messages = vec![
-        Message::new("Alice", "Hello"),
-        Message::new("Bob", "World"),
-    ];
+    let messages = vec![Message::new("Alice", "Hello"), Message::new("Bob", "World")];
 
     let config = OutputConfig::new();
     let jsonl = to_jsonl(&messages, &config).expect("JSONL generation failed");
@@ -413,8 +410,7 @@ fn test_jsonl_each_line_valid() {
     // Each line should be valid JSON
     for line in jsonl.lines() {
         if !line.is_empty() {
-            let _: serde_json::Value =
-                serde_json::from_str(line).expect("Invalid JSON line");
+            let _: serde_json::Value = serde_json::from_str(line).expect("Invalid JSON line");
         }
     }
 }

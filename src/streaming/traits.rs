@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn test_streaming_config_clone() {
         let config = StreamingConfig::new().with_buffer_size(512 * 1024);
-        let cloned = config.clone();
+        let cloned = config;
         assert_eq!(config.buffer_size, cloned.buffer_size);
     }
 

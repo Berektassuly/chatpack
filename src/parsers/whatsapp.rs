@@ -363,7 +363,8 @@ mod tests {
     #[test]
     fn test_parse_str_media_omitted_not_filtered() {
         let parser = WhatsAppParser::new();
-        let content = "[1/15/24, 10:30:45 AM] Alice: <Media omitted>\n[1/15/24, 10:31:00 AM] Bob: Hi";
+        let content =
+            "[1/15/24, 10:30:45 AM] Alice: <Media omitted>\n[1/15/24, 10:31:00 AM] Bob: Hi";
         let messages = parser.parse_str(content).expect("parse failed");
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].content, "<Media omitted>");
