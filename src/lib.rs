@@ -171,7 +171,7 @@
 //! | [`config`] | Parser configurations: [`TelegramConfig`](config::TelegramConfig), [`WhatsAppConfig`](config::WhatsAppConfig), etc. |
 //! | [`core`] | Core types: [`Message`], [`OutputConfig`](core::OutputConfig), [`FilterConfig`](core::FilterConfig) |
 //! | [`streaming`] | Memory-efficient streaming parsers for large files |
-//! | [`format`] | Output formats: [`OutputFormat`](format::OutputFormat), [`write_to_format`](format::write_to_format) |
+//! | [`mod@format`] | Output formats: [`OutputFormat`](format::OutputFormat), [`write_to_format`](format::write_to_format) |
 //! | [`error`] | Error types: [`ChatpackError`], [`Result`] |
 //! | [`prelude`] | Convenient re-exports for common usage |
 //!

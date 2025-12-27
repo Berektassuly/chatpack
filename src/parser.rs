@@ -260,7 +260,7 @@ impl std::str::FromStr for Platform {
 
 /// Iterator over parsed messages with progress tracking.
 ///
-/// Wraps a streaming parser's [`MessageIterator`](crate::streaming::MessageIterator)
+/// Wraps a streaming parser's [`MessageIterator`]
 /// and converts errors to [`ChatpackError`]. Provides progress information for
 /// long-running operations.
 ///
