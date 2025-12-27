@@ -386,6 +386,42 @@ struct DiscordReference {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
+
+    // =========================================================================
+    // DiscordStreamingParser tests
+    // =========================================================================
+
+    #[test]
+    fn test_parser_new() {
+        let parser = DiscordStreamingParser::new();
+        assert_eq!(parser.name(), "Discord (Streaming)");
+    }
+
+    #[test]
+    fn test_parser_default() {
+        let parser = DiscordStreamingParser::default();
+        assert_eq!(parser.name(), "Discord (Streaming)");
+    }
+
+    #[test]
+    fn test_parser_with_config() {
+        let config = StreamingConfig::new()
+            .with_buffer_size(128 * 1024)
+            .with_skip_invalid(true);
+        let parser = DiscordStreamingParser::with_config(config);
+        assert_eq!(parser.name(), "Discord (Streaming)");
+    }
+
+    #[test]
+    fn test_parser_name() {
+        let parser = DiscordStreamingParser::new();
+        assert_eq!(parser.name(), "Discord (Streaming)");
+    }
+
+    // =========================================================================
+    // JSONL detection tests
+    // =========================================================================
 
     #[test]
     fn test_is_jsonl_detection() {
@@ -401,8 +437,298 @@ mod tests {
     }
 
     #[test]
-    fn test_parser_name() {
-        let parser = DiscordStreamingParser::new();
-        assert_eq!(parser.name(), "Discord (Streaming)");
+    fn test_is_jsonl_with_messages_key() {
+        // Should not be JSONL if contains "messages"
+        assert!(!DiscordStreamingParser::is_jsonl(
+            r#"{"messages":[]}"#
+        ));
+    }
+
+    #[test]
+    fn test_is_jsonl_with_guild_key() {
+        // Should not be JSONL if contains "guild"
+        assert!(!DiscordStreamingParser::is_jsonl(
+            r#"{"guild":{"id":"123"}}"#
+        ));
+    }
+
+    #[test]
+    fn test_is_jsonl_whitespace() {
+        // Should handle leading whitespace
+        assert!(DiscordStreamingParser::is_jsonl(
+            r#"   {"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"hi","author":{"name":"bob"}}"#
+        ));
+    }
+
+    // =========================================================================
+    // DiscordJsonlIterator tests
+    // =========================================================================
+
+    #[test]
+    fn test_jsonl_iterator_basic() {
+        let jsonl = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}}
+{"id":"2","timestamp":"2024-01-01T00:01:00Z","content":"Hi there","author":{"name":"Bob"}}"#;
+
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let config = StreamingConfig::default();
+        let mut iter = DiscordJsonlIterator::new(cursor, jsonl.len() as u64, config);
+
+        let msg1 = iter.next().expect("should have message").expect("parse ok");
+        assert_eq!(msg1.sender, "Alice");
+        assert_eq!(msg1.content, "Hello");
+
+        let msg2 = iter.next().expect("should have message").expect("parse ok");
+        assert_eq!(msg2.sender, "Bob");
+        assert_eq!(msg2.content, "Hi there");
+
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_jsonl_iterator_with_nickname() {
+        let jsonl = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"alice123","nickname":"Alice"}}"#;
+
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let config = StreamingConfig::default();
+        let mut iter = DiscordJsonlIterator::new(cursor, jsonl.len() as u64, config);
+
+        let msg = iter.next().expect("should have message").expect("parse ok");
+        assert_eq!(msg.sender, "Alice"); // Should prefer nickname
+    }
+
+    #[test]
+    fn test_jsonl_iterator_skips_empty_content() {
+        let jsonl = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}}
+{"id":"2","timestamp":"2024-01-01T00:01:00Z","content":"   ","author":{"name":"Bob"}}
+{"id":"3","timestamp":"2024-01-01T00:02:00Z","content":"World","author":{"name":"Charlie"}}"#;
+
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonlIterator::new(cursor, jsonl.len() as u64, config);
+
+        let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[1].sender, "Charlie");
+    }
+
+    #[test]
+    fn test_jsonl_iterator_skips_empty_lines() {
+        let jsonl = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}}
+
+{"id":"2","timestamp":"2024-01-01T00:01:00Z","content":"World","author":{"name":"Bob"}}"#;
+
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonlIterator::new(cursor, jsonl.len() as u64, config);
+
+        let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        assert_eq!(messages.len(), 2);
+    }
+
+    #[test]
+    fn test_jsonl_iterator_with_edited_timestamp() {
+        let jsonl = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","timestampEdited":"2024-01-01T00:05:00Z","content":"Edited","author":{"name":"Alice"}}"#;
+
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let config = StreamingConfig::default();
+        let mut iter = DiscordJsonlIterator::new(cursor, jsonl.len() as u64, config);
+
+        let msg = iter.next().expect("should have message").expect("parse ok");
+        assert!(msg.edited.is_some());
+    }
+
+    #[test]
+    fn test_jsonl_iterator_progress() {
+        let jsonl = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}}"#;
+
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let file_size = jsonl.len() as u64;
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonlIterator::new(cursor, file_size, config);
+
+        assert_eq!(iter.total_bytes(), Some(file_size));
+        assert_eq!(iter.bytes_processed(), 0);
+        let progress = iter.progress();
+        assert!(progress.is_some());
+    }
+
+    #[test]
+    fn test_jsonl_iterator_zero_file_size() {
+        let jsonl = "";
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonlIterator::new(cursor, 0, config);
+
+        assert!(iter.progress().is_none());
+    }
+
+    #[test]
+    fn test_jsonl_iterator_skip_invalid() {
+        let jsonl = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}}
+invalid json line
+{"id":"2","timestamp":"2024-01-01T00:01:00Z","content":"World","author":{"name":"Bob"}}"#;
+
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let config = StreamingConfig::new().with_skip_invalid(true);
+        let iter = DiscordJsonlIterator::new(cursor, jsonl.len() as u64, config);
+
+        let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        assert_eq!(messages.len(), 2);
+    }
+
+    #[test]
+    fn test_jsonl_iterator_error_on_invalid() {
+        let jsonl = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}}
+invalid json line"#;
+
+        let cursor = Cursor::new(jsonl.as_bytes().to_vec());
+        let config = StreamingConfig::new().with_skip_invalid(false);
+        let mut iter = DiscordJsonlIterator::new(cursor, jsonl.len() as u64, config);
+
+        let _ = iter.next(); // First message OK
+        let result = iter.next();
+        assert!(result.is_some());
+        assert!(result.unwrap().is_err());
+    }
+
+    // =========================================================================
+    // DiscordJsonIterator tests
+    // =========================================================================
+
+    #[test]
+    fn test_json_iterator_basic() {
+        let json = r#"{"guild":{"id":"123"},"messages":[
+{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}},
+{"id":"2","timestamp":"2024-01-01T00:01:00Z","content":"Hi","author":{"name":"Bob"}}
+]}"#;
+
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let file_size = json.len() as u64;
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonIterator::new(cursor, file_size, config)
+            .expect("create iterator");
+
+        let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[1].sender, "Bob");
+    }
+
+    #[test]
+    fn test_json_iterator_with_reference() {
+        let json = r#"{"messages":[
+{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}},
+{"id":"2","timestamp":"2024-01-01T00:01:00Z","content":"Reply","author":{"name":"Bob"},"reference":{"messageId":"1"}}
+]}"#;
+
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let file_size = json.len() as u64;
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonIterator::new(cursor, file_size, config)
+            .expect("create iterator");
+
+        let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[1].reply_to, Some(1));
+    }
+
+    #[test]
+    fn test_json_iterator_skips_empty_content() {
+        let json = r#"{"messages":[
+{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}},
+{"id":"2","timestamp":"2024-01-01T00:01:00Z","content":"","author":{"name":"Bob"}},
+{"id":"3","timestamp":"2024-01-01T00:02:00Z","content":"World","author":{"name":"Charlie"}}
+]}"#;
+
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let file_size = json.len() as u64;
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonIterator::new(cursor, file_size, config)
+            .expect("create iterator");
+
+        let messages: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+        assert_eq!(messages.len(), 2);
+    }
+
+    #[test]
+    fn test_json_iterator_missing_messages_array() {
+        let json = r#"{"guild":{"id":"123"}}"#;
+
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let file_size = json.len() as u64;
+        let config = StreamingConfig::default();
+        let result = DiscordJsonIterator::new(cursor, file_size, config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_json_iterator_progress() {
+        let json = r#"{"messages":[
+{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}}
+]}"#;
+
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let file_size = json.len() as u64;
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonIterator::new(cursor, file_size, config)
+            .expect("create iterator");
+
+        assert_eq!(iter.total_bytes(), Some(file_size));
+        assert!(iter.bytes_processed() > 0); // Header was read
+    }
+
+    #[test]
+    fn test_json_iterator_zero_file_size() {
+        let json = r#"{"messages":[]}"#;
+
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let config = StreamingConfig::default();
+        let iter = DiscordJsonIterator::new(cursor, 0, config)
+            .expect("create iterator");
+
+        assert!(iter.progress().is_none());
+    }
+
+    // =========================================================================
+    // parse_line tests for JSONL
+    // =========================================================================
+
+    #[test]
+    fn test_parse_line_valid() {
+        let line = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"Hello","author":{"name":"Alice"}}"#;
+        let result = DiscordJsonlIterator::<Cursor<Vec<u8>>>::parse_line(line);
+        assert!(result.is_ok());
+        let msg = result.unwrap();
+        assert!(msg.is_some());
+        assert_eq!(msg.unwrap().sender, "Alice");
+    }
+
+    #[test]
+    fn test_parse_line_empty() {
+        let result = DiscordJsonlIterator::<Cursor<Vec<u8>>>::parse_line("");
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_line_whitespace_only() {
+        let result = DiscordJsonlIterator::<Cursor<Vec<u8>>>::parse_line("   ");
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_line_empty_content() {
+        let line = r#"{"id":"1","timestamp":"2024-01-01T00:00:00Z","content":"","author":{"name":"Alice"}}"#;
+        let result = DiscordJsonlIterator::<Cursor<Vec<u8>>>::parse_line(line);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_line_invalid_json() {
+        let result = DiscordJsonlIterator::<Cursor<Vec<u8>>>::parse_line("not json");
+        assert!(result.is_err());
     }
 }

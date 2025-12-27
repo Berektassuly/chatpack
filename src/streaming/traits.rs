@@ -127,9 +127,22 @@ impl StreamingConfig {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // StreamingConfig tests
+    // =========================================================================
+
     #[test]
     fn test_streaming_config_default() {
         let config = StreamingConfig::default();
+        assert_eq!(config.buffer_size, 64 * 1024);
+        assert_eq!(config.max_message_size, 10 * 1024 * 1024);
+        assert!(config.skip_invalid);
+        assert_eq!(config.progress_interval, 10_000);
+    }
+
+    #[test]
+    fn test_streaming_config_new() {
+        let config = StreamingConfig::new();
         assert_eq!(config.buffer_size, 64 * 1024);
         assert_eq!(config.max_message_size, 10 * 1024 * 1024);
         assert!(config.skip_invalid);
@@ -148,9 +161,46 @@ mod tests {
     }
 
     #[test]
+    fn test_streaming_config_with_progress_interval() {
+        let config = StreamingConfig::new().with_progress_interval(5000);
+        assert_eq!(config.progress_interval, 5000);
+    }
+
+    #[test]
+    fn test_streaming_config_builder_chain() {
+        let config = StreamingConfig::new()
+            .with_buffer_size(256 * 1024)
+            .with_max_message_size(20 * 1024 * 1024)
+            .with_skip_invalid(false)
+            .with_progress_interval(1000);
+
+        assert_eq!(config.buffer_size, 256 * 1024);
+        assert_eq!(config.max_message_size, 20 * 1024 * 1024);
+        assert!(!config.skip_invalid);
+        assert_eq!(config.progress_interval, 1000);
+    }
+
+    #[test]
     fn test_streaming_config_copy() {
         let config = StreamingConfig::new();
         let copied = config; // Copy
         assert_eq!(config.buffer_size, copied.buffer_size);
+        assert_eq!(config.max_message_size, copied.max_message_size);
+        assert_eq!(config.skip_invalid, copied.skip_invalid);
+    }
+
+    #[test]
+    fn test_streaming_config_clone() {
+        let config = StreamingConfig::new().with_buffer_size(512 * 1024);
+        let cloned = config.clone();
+        assert_eq!(config.buffer_size, cloned.buffer_size);
+    }
+
+    #[test]
+    fn test_streaming_config_debug() {
+        let config = StreamingConfig::new();
+        let debug = format!("{:?}", config);
+        assert!(debug.contains("StreamingConfig"));
+        assert!(debug.contains("buffer_size"));
     }
 }

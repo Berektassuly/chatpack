@@ -286,6 +286,10 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
+    // =========================================================================
+    // FromStr tests
+    // =========================================================================
+
     #[test]
     fn test_format_from_str() {
         assert_eq!(OutputFormat::from_str("csv").unwrap(), OutputFormat::Csv);
@@ -299,8 +303,27 @@ mod tests {
             OutputFormat::Jsonl
         );
         assert_eq!(OutputFormat::from_str("CSV").unwrap(), OutputFormat::Csv);
-        assert!(OutputFormat::from_str("unknown").is_err());
+        assert_eq!(OutputFormat::from_str("JSON").unwrap(), OutputFormat::Json);
+        assert_eq!(OutputFormat::from_str("JSONL").unwrap(), OutputFormat::Jsonl);
+        assert_eq!(OutputFormat::from_str("NDJSON").unwrap(), OutputFormat::Jsonl);
     }
+
+    #[test]
+    fn test_format_from_str_errors() {
+        let err = OutputFormat::from_str("unknown").unwrap_err();
+        assert!(err.contains("Unknown format"));
+        assert!(err.contains("unknown"));
+
+        let err = OutputFormat::from_str("").unwrap_err();
+        assert!(err.contains("Unknown format"));
+
+        let err = OutputFormat::from_str("xml").unwrap_err();
+        assert!(err.contains("Unknown format"));
+    }
+
+    // =========================================================================
+    // Display tests
+    // =========================================================================
 
     #[test]
     fn test_format_display() {
@@ -309,6 +332,10 @@ mod tests {
         assert_eq!(OutputFormat::Jsonl.to_string(), "JSONL");
     }
 
+    // =========================================================================
+    // Extension tests
+    // =========================================================================
+
     #[test]
     fn test_format_extension() {
         assert_eq!(OutputFormat::Csv.extension(), "csv");
@@ -316,12 +343,20 @@ mod tests {
         assert_eq!(OutputFormat::Jsonl.extension(), "jsonl");
     }
 
+    // =========================================================================
+    // MIME type tests
+    // =========================================================================
+
     #[test]
     fn test_format_mime_type() {
         assert_eq!(OutputFormat::Csv.mime_type(), "text/csv");
         assert_eq!(OutputFormat::Json.mime_type(), "application/json");
         assert_eq!(OutputFormat::Jsonl.mime_type(), "application/x-ndjson");
     }
+
+    // =========================================================================
+    // from_path tests
+    // =========================================================================
 
     #[test]
     fn test_format_from_path() {
@@ -345,8 +380,27 @@ mod tests {
             OutputFormat::from_path("/path/to/file.JSON").unwrap(),
             OutputFormat::Json
         );
-        assert!(OutputFormat::from_path("output.txt").is_err());
+        assert_eq!(
+            OutputFormat::from_path("file.CSV").unwrap(),
+            OutputFormat::Csv
+        );
     }
+
+    #[test]
+    fn test_format_from_path_errors() {
+        let err = OutputFormat::from_path("output.txt");
+        assert!(err.is_err());
+
+        let err = OutputFormat::from_path("noextension");
+        assert!(err.is_err());
+
+        let err = OutputFormat::from_path("file.xml");
+        assert!(err.is_err());
+    }
+
+    // =========================================================================
+    // all() and all_names() tests
+    // =========================================================================
 
     #[test]
     fn test_format_all() {
@@ -358,9 +412,26 @@ mod tests {
     }
 
     #[test]
+    fn test_format_all_names() {
+        let names = OutputFormat::all_names();
+        assert!(names.contains(&"csv"));
+        assert!(names.contains(&"json"));
+        assert!(names.contains(&"jsonl"));
+        assert!(names.contains(&"ndjson"));
+    }
+
+    // =========================================================================
+    // Default trait tests
+    // =========================================================================
+
+    #[test]
     fn test_format_default() {
         assert_eq!(OutputFormat::default(), OutputFormat::Csv);
     }
+
+    // =========================================================================
+    // Serde tests
+    // =========================================================================
 
     #[test]
     fn test_format_serde() {
@@ -370,5 +441,67 @@ mod tests {
 
         let parsed: OutputFormat = serde_json::from_str("\"csv\"").unwrap();
         assert_eq!(parsed, OutputFormat::Csv);
+    }
+
+    #[test]
+    fn test_format_serde_all_variants() {
+        for format in OutputFormat::all() {
+            let json = serde_json::to_string(format).expect("serialize failed");
+            let parsed: OutputFormat = serde_json::from_str(&json).expect("deserialize failed");
+            assert_eq!(parsed, *format);
+        }
+    }
+
+    // =========================================================================
+    // Traits tests (Clone, Copy, Eq, Hash)
+    // =========================================================================
+
+    #[test]
+    fn test_format_clone_copy() {
+        let f1 = OutputFormat::Csv;
+        let f2 = f1; // Copy
+        let f3 = f1.clone();
+        assert_eq!(f1, f2);
+        assert_eq!(f1, f3);
+    }
+
+    #[test]
+    fn test_format_eq_hash() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(OutputFormat::Csv);
+        set.insert(OutputFormat::Json);
+        set.insert(OutputFormat::Csv); // Duplicate
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn test_format_debug() {
+        let debug = format!("{:?}", OutputFormat::Csv);
+        assert!(debug.contains("Csv"));
+    }
+
+    // =========================================================================
+    // to_format_string tests
+    // =========================================================================
+
+    #[cfg(all(feature = "csv-output", feature = "json-output"))]
+    #[test]
+    fn test_to_format_string() {
+        let messages = vec![Message::new("Alice", "Hello!")];
+        let config = OutputConfig::new();
+
+        let csv = to_format_string(&messages, OutputFormat::Csv, &config).expect("csv failed");
+        assert!(csv.contains("Alice"));
+        assert!(csv.contains("Hello"));
+
+        let json = to_format_string(&messages, OutputFormat::Json, &config).expect("json failed");
+        assert!(json.contains("Alice"));
+        assert!(json.contains("Hello"));
+
+        let jsonl =
+            to_format_string(&messages, OutputFormat::Jsonl, &config).expect("jsonl failed");
+        assert!(jsonl.contains("Alice"));
+        assert!(jsonl.contains("Hello"));
     }
 }
