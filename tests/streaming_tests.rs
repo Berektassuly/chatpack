@@ -40,8 +40,8 @@ fn create_telegram_test_file(count: usize) -> NamedTempFile {
 fn test_streaming_parser_factory() {
     assert!(create_streaming_parser(Source::Telegram).is_some());
     assert!(create_streaming_parser(Source::Discord).is_some());
-    assert!(create_streaming_parser(Source::WhatsApp).is_none());
-    assert!(create_streaming_parser(Source::Instagram).is_none());
+    assert!(create_streaming_parser(Source::WhatsApp).is_some());
+    assert!(create_streaming_parser(Source::Instagram).is_some());
 }
 
 #[test]

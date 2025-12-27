@@ -43,27 +43,29 @@
 //! # Supported Formats
 //!
 //! - Telegram JSON (via [`TelegramStreamingParser`])
-//! - Discord JSONL (via [`DiscordStreamingParser`])
-//!
-//! WhatsApp and Instagram use line-based/small JSON formats that don't
-//! typically require streaming.
+//! - Discord JSONL/JSON (via [`DiscordStreamingParser`])
+//! - Instagram JSON (via [`InstagramStreamingParser`])
+//! - WhatsApp TXT (via [`WhatsAppStreamingParser`])
 
 mod discord;
 mod error;
+mod instagram;
 mod telegram;
 mod traits;
+mod whatsapp;
 
 pub use discord::DiscordStreamingParser;
 pub use error::{StreamingError, StreamingResult};
+pub use instagram::InstagramStreamingParser;
 pub use telegram::TelegramStreamingParser;
 pub use traits::{MessageIterator, StreamingConfig, StreamingParser};
+pub use whatsapp::WhatsAppStreamingParser;
 
 use crate::cli::Source;
 
 /// Creates a streaming parser for the specified source.
 ///
-/// Returns `None` for sources that don't support streaming
-/// (WhatsApp and Instagram typically don't need it).
+/// All sources now support streaming parsing.
 ///
 /// # Example
 ///
@@ -81,8 +83,8 @@ pub fn create_streaming_parser(source: Source) -> Option<Box<dyn StreamingParser
     match source {
         Source::Telegram => Some(Box::new(TelegramStreamingParser::new())),
         Source::Discord => Some(Box::new(DiscordStreamingParser::new())),
-        // WhatsApp and Instagram don't typically need streaming
-        Source::WhatsApp | Source::Instagram => None,
+        Source::Instagram => Some(Box::new(InstagramStreamingParser::new())),
+        Source::WhatsApp => Some(Box::new(WhatsAppStreamingParser::new())),
     }
 }
 
@@ -101,11 +103,20 @@ mod tests {
     fn test_create_streaming_parser_discord() {
         let parser = create_streaming_parser(Source::Discord);
         assert!(parser.is_some());
+        assert_eq!(parser.unwrap().name(), "Discord (Streaming)");
     }
 
     #[test]
-    fn test_create_streaming_parser_unsupported() {
-        assert!(create_streaming_parser(Source::WhatsApp).is_none());
-        assert!(create_streaming_parser(Source::Instagram).is_none());
+    fn test_create_streaming_parser_instagram() {
+        let parser = create_streaming_parser(Source::Instagram);
+        assert!(parser.is_some());
+        assert_eq!(parser.unwrap().name(), "Instagram (Streaming)");
+    }
+
+    #[test]
+    fn test_create_streaming_parser_whatsapp() {
+        let parser = create_streaming_parser(Source::WhatsApp);
+        assert!(parser.is_some());
+        assert_eq!(parser.unwrap().name(), "WhatsApp (Streaming)");
     }
 }

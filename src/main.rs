@@ -1,26 +1,19 @@
 //! # chatpack CLI
 //!
 //! Command-line interface for chatpack library.
-//!
-//! ## Usage
-//! ```bash
-//! chatpack <source> <input_file> [-o output_file] [-f format]
-//! chatpack telegram chat.json -o output.csv
-//! chatpack tg chat.json --format jsonl
-//! ```
 
 use std::process;
 use std::time::Instant;
 
 use clap::Parser;
 
-// Import from the library - NOT declaring modules
 use chatpack::cli::{Args, OutputFormat};
 use chatpack::core::{
     FilterConfig, OutputConfig, ProcessingStats, apply_filters, merge_consecutive, write_csv,
     write_json, write_jsonl,
 };
 use chatpack::parsers::create_parser;
+use chatpack::streaming::create_streaming_parser;
 
 fn main() {
     if let Err(e) = run() {
@@ -33,9 +26,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let total_start = Instant::now();
     let args = Args::parse();
 
-    // Create parser for the selected source
-    let parser = create_parser(args.source);
-
     // Determine output extension based on format
     let output_path = adjust_output_extension(&args.output, args.format);
 
@@ -46,6 +36,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!("📂 Input:   {}", args.input);
     println!("💾 Output:  {}", output_path);
     println!("📄 Format:  {}", args.format);
+    if args.streaming {
+        println!("🌊 Mode:    Streaming");
+    }
 
     // Build filter configuration
     let mut filter_config = FilterConfig::new();
@@ -67,12 +60,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     println!();
 
-    // Step 1: Parse
-    println!("⏳ Parsing {}...", parser.name());
-    let parse_start = Instant::now();
-    let messages = parser.parse(&args.input)?;
-    let parse_time = parse_start.elapsed();
-    let original_count = messages.len();
+    // Parse messages (streaming or regular)
+    let (messages, original_count, parse_time) = if args.streaming {
+        parse_streaming(&args)?
+    } else {
+        parse_regular(&args)?
+    };
+
     println!(
         "   Found {} messages ({:.2}s)",
         original_count,
@@ -145,7 +139,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("✅ Done! Output saved to {}", output_path);
 
-    // Summary with benchmarks
+    // Summary
     println!();
     println!("📊 Summary:");
     println!("   Original:  {} messages", original_count);
@@ -164,14 +158,54 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Parse using regular (in-memory) parser
+fn parse_regular(
+    args: &Args,
+) -> Result<
+    (
+        Vec<chatpack::core::InternalMessage>,
+        usize,
+        std::time::Duration,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let parser = create_parser(args.source);
+    println!("⏳ Parsing {}...", parser.name());
+    let parse_start = Instant::now();
+    let messages = parser.parse(&args.input)?;
+    let count = messages.len();
+    Ok((messages, count, parse_start.elapsed()))
+}
+
+/// Parse using streaming parser (memory-efficient)
+fn parse_streaming(
+    args: &Args,
+) -> Result<
+    (
+        Vec<chatpack::core::InternalMessage>,
+        usize,
+        std::time::Duration,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let parser = create_streaming_parser(args.source)
+        .ok_or_else(|| format!("Streaming not supported for {}", args.source))?;
+
+    println!("⏳ Streaming {}...", parser.name());
+    let parse_start = Instant::now();
+
+    let messages: Vec<_> = parser.stream(&args.input)?.filter_map(Result::ok).collect();
+
+    let count = messages.len();
+    Ok((messages, count, parse_start.elapsed()))
+}
+
 /// Adjusts output file extension based on format if using default output.
 fn adjust_output_extension(output: &str, format: OutputFormat) -> String {
-    // If user specified a custom output, use it as-is
     if output != "optimized_chat.csv" {
         return output.to_string();
     }
 
-    // Otherwise, adjust extension based on format
     match format {
         OutputFormat::Csv => "optimized_chat.csv".to_string(),
         OutputFormat::Json => "optimized_chat.json".to_string(),

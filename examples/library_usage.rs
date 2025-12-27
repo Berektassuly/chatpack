@@ -63,7 +63,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let minimal = OutputConfig::new();
     let full = OutputConfig::all();
 
-    println!("   Minimal config - timestamps: {}", minimal.include_timestamps);
+    println!(
+        "   Minimal config - timestamps: {}",
+        minimal.include_timestamps
+    );
     println!("   Full config - timestamps: {}", full.include_timestamps);
     println!("   Full config - ids: {}", full.include_ids);
 
