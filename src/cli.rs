@@ -83,6 +83,9 @@ pub struct Args {
     /// Filter messages from specific user
     #[arg(long, value_name = "USER")]
     pub from: Option<String>,
+
+    #[arg(long)]
+    pub streaming: bool,
 }
 
 /// Supported chat sources.
