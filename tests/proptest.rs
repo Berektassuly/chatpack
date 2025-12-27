@@ -48,7 +48,7 @@ fn arb_messages(max_len: usize) -> impl Strategy<Value = Vec<Message>> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(50))]
+    #![proptest_config(ProptestConfig::with_cases(100))]
 
     // ============================================
     // MERGE PROPERTIES
@@ -74,6 +74,43 @@ proptest! {
     fn merge_single_stays_single(msg in arb_message()) {
         let result = merge_consecutive(vec![msg]);
         prop_assert_eq!(result.len(), 1);
+    }
+
+    /// Merge with same sender produces exactly one message
+    #[test]
+    fn merge_same_sender_produces_one(n in 1usize..10) {
+        let messages: Vec<Message> = (0..n)
+            .map(|i| Message {
+                sender: "Alice".to_string(),
+                content: format!("Message {}", i),
+                timestamp: None,
+                id: None,
+                reply_to: None,
+                edited: None,
+            })
+            .collect();
+        let merged = merge_consecutive(messages);
+        prop_assert_eq!(merged.len(), 1);
+    }
+
+    /// Merge preserves total content
+    #[test]
+    fn merge_preserves_content_parts(n in 1usize..5) {
+        let messages: Vec<Message> = (0..n)
+            .map(|i| Message {
+                sender: "Alice".to_string(),
+                content: format!("part{}", i),
+                timestamp: None,
+                id: None,
+                reply_to: None,
+                edited: None,
+            })
+            .collect();
+        let merged = merge_consecutive(messages);
+        for i in 0..n {
+            let expected = format!("part{}", i);
+            prop_assert!(merged[0].content.contains(&expected), "Missing part{}", i);
+        }
     }
 
     // ============================================
@@ -162,6 +199,19 @@ proptest! {
         };
         let merged = merge_consecutive(vec![msg]);
         prop_assert_eq!(&merged[0].content, &content);
+    }
+
+    // ============================================
+    // SERDE ROUNDTRIP
+    // ============================================
+
+    /// Message serialization roundtrip
+    #[test]
+    fn message_serde_roundtrip(msg in arb_message()) {
+        let json = serde_json::to_string(&msg).expect("serialize");
+        let parsed: Message = serde_json::from_str(&json).expect("deserialize");
+        prop_assert_eq!(msg.sender, parsed.sender);
+        prop_assert_eq!(msg.content, parsed.content);
     }
 }
 

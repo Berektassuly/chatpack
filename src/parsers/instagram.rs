@@ -139,3 +139,189 @@ impl Parser for InstagramParser {
         self.config.buffer_size
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // InstagramParser construction tests
+    // =========================================================================
+
+    #[test]
+    fn test_parser_new() {
+        let parser = InstagramParser::new();
+        assert!(!parser.config().streaming);
+        assert!(parser.config().fix_encoding);
+    }
+
+    #[test]
+    fn test_parser_default() {
+        let parser = InstagramParser::default();
+        assert!(!parser.config().streaming);
+        assert!(parser.config().fix_encoding);
+    }
+
+    #[test]
+    fn test_parser_with_config() {
+        let config = InstagramConfig::new()
+            .with_streaming(true)
+            .with_fix_encoding(false);
+        let parser = InstagramParser::with_config(config);
+        assert!(parser.config().streaming);
+        assert!(!parser.config().fix_encoding);
+    }
+
+    #[test]
+    fn test_parser_with_streaming() {
+        let parser = InstagramParser::with_streaming();
+        assert!(parser.config().streaming);
+    }
+
+    #[test]
+    fn test_parser_name() {
+        let parser = InstagramParser::new();
+        assert_eq!(Parser::name(&parser), "Instagram");
+    }
+
+    #[test]
+    fn test_parser_platform() {
+        let parser = InstagramParser::new();
+        assert_eq!(parser.platform(), Platform::Instagram);
+    }
+
+    // =========================================================================
+    // parse_str tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_simple() {
+        let parser = InstagramParser::new();
+        let json = r#"{"messages": [{"sender_name": "Alice", "content": "Hello", "timestamp_ms": 1234567890000}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender, "Alice");
+        assert_eq!(messages[0].content, "Hello");
+    }
+
+    #[test]
+    fn test_parse_str_filters_empty_content() {
+        let parser = InstagramParser::new();
+        let json = r#"{"messages": [
+            {"sender_name": "Alice", "content": "Hello", "timestamp_ms": 1234567890000},
+            {"sender_name": "Bob", "content": "", "timestamp_ms": 1234567891000},
+            {"sender_name": "Charlie", "content": "Hi", "timestamp_ms": 1234567892000}
+        ]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].sender, "Charlie"); // Reversed order
+        assert_eq!(messages[1].sender, "Alice");
+    }
+
+    #[test]
+    fn test_parse_str_reverses_order() {
+        let parser = InstagramParser::new();
+        let json = r#"{"messages": [
+            {"sender_name": "First", "content": "1", "timestamp_ms": 1234567890000},
+            {"sender_name": "Second", "content": "2", "timestamp_ms": 1234567891000},
+            {"sender_name": "Third", "content": "3", "timestamp_ms": 1234567892000}
+        ]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 3);
+        // Instagram stores newest first, so should be reversed
+        assert_eq!(messages[0].sender, "Third");
+        assert_eq!(messages[1].sender, "Second");
+        assert_eq!(messages[2].sender, "First");
+    }
+
+    #[test]
+    fn test_parse_str_with_shared_link() {
+        let parser = InstagramParser::new();
+        // When content is present, it's used (share link is separate metadata)
+        let json = r#"{"messages": [{"sender_name": "Alice", "content": "Check this", "share": {"link": "https://example.com"}, "timestamp_ms": 1234567890000}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content, "Check this");
+    }
+
+    #[test]
+    fn test_parse_str_with_share_text_only() {
+        let parser = InstagramParser::new();
+        // When no content but share_text exists, use share_text
+        let json = r#"{"messages": [{"sender_name": "Alice", "share": {"share_text": "Shared content", "link": "https://example.com"}, "timestamp_ms": 1234567890000}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content, "Shared content");
+    }
+
+    #[test]
+    fn test_parse_str_empty_messages() {
+        let parser = InstagramParser::new();
+        let json = r#"{"messages": []}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn test_parse_str_invalid_json() {
+        let parser = InstagramParser::new();
+        let result = parser.parse_str("not json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_str_missing_messages() {
+        let parser = InstagramParser::new();
+        let result = parser.parse_str(r#"{"participants": []}"#);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_str_timestamp_parsing() {
+        let parser = InstagramParser::new();
+        let json = r#"{"messages": [{"sender_name": "Alice", "content": "Hello", "timestamp_ms": 1609459200000}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert!(messages[0].timestamp.is_some());
+    }
+
+    // =========================================================================
+    // Encoding fix tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_str_without_fix_encoding() {
+        let config = InstagramConfig::new().with_fix_encoding(false);
+        let parser = InstagramParser::with_config(config);
+        let json = r#"{"messages": [{"sender_name": "Test", "content": "Hello", "timestamp_ms": 1234567890000}]}"#;
+        let messages = parser.parse_str(json).expect("parse failed");
+        assert_eq!(messages.len(), 1);
+    }
+
+    // =========================================================================
+    // Streaming support tests
+    // =========================================================================
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_supports_streaming_false_by_default() {
+        let parser = InstagramParser::new();
+        assert!(!parser.supports_streaming());
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_supports_streaming_true_when_enabled() {
+        let parser = InstagramParser::with_streaming();
+        assert!(parser.supports_streaming());
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_recommended_buffer_size() {
+        let parser = InstagramParser::new();
+        assert_eq!(parser.recommended_buffer_size(), 64 * 1024);
+
+        let streaming_parser = InstagramParser::with_streaming();
+        assert_eq!(streaming_parser.recommended_buffer_size(), 256 * 1024);
+    }
+}

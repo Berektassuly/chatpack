@@ -277,6 +277,42 @@ mod tests {
         .to_string()
     }
 
+    // =========================================================================
+    // Constructor tests
+    // =========================================================================
+
+    #[test]
+    fn test_parser_new() {
+        let parser = InstagramStreamingParser::new();
+        assert_eq!(parser.name(), "Instagram (Streaming)");
+    }
+
+    #[test]
+    fn test_parser_default() {
+        let parser = InstagramStreamingParser::default();
+        assert_eq!(parser.name(), "Instagram (Streaming)");
+    }
+
+    #[test]
+    fn test_parser_with_config() {
+        let config = StreamingConfig::default()
+            .with_buffer_size(512 * 1024)
+            .with_max_message_size(2 * 1024 * 1024)
+            .with_skip_invalid(true);
+        let parser = InstagramStreamingParser::with_config(config);
+        assert_eq!(parser.name(), "Instagram (Streaming)");
+    }
+
+    #[test]
+    fn test_recommended_buffer_size() {
+        let parser = InstagramStreamingParser::new();
+        assert!(parser.recommended_buffer_size() > 0);
+    }
+
+    // =========================================================================
+    // Basic parsing tests
+    // =========================================================================
+
     #[test]
     fn test_streaming_parser_basic() {
         let json = create_test_json();
@@ -297,6 +333,24 @@ mod tests {
     }
 
     #[test]
+    fn test_empty_messages_array() {
+        let json = r#"{"participants": [], "messages": []}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let mut iterator =
+            InstagramMessageIterator::new(reader, json.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.by_ref().filter_map(Result::ok).collect();
+        assert!(messages.is_empty());
+    }
+
+    // =========================================================================
+    // Progress and iterator trait tests
+    // =========================================================================
+
+    #[test]
     fn test_progress_reporting() {
         let json = create_test_json();
         let cursor = Cursor::new(json.as_bytes().to_vec());
@@ -312,6 +366,120 @@ mod tests {
         let progress = iterator.progress().unwrap();
         assert!(progress > 90.0);
     }
+
+    #[test]
+    fn test_progress_with_zero_file_size() {
+        let json = create_test_json();
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            InstagramMessageIterator::new(reader, 0, StreamingConfig::default()).unwrap();
+
+        assert!(iterator.progress().is_none());
+    }
+
+    #[test]
+    fn test_bytes_processed() {
+        let json = create_test_json();
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let mut iterator =
+            InstagramMessageIterator::new(reader, json.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let initial_bytes = iterator.bytes_processed();
+        assert!(initial_bytes > 0); // Read past header
+
+        // Consume one message
+        let _ = iterator.next();
+        let bytes_after = iterator.bytes_processed();
+        assert!(bytes_after > initial_bytes);
+    }
+
+    #[test]
+    fn test_total_bytes() {
+        let json = create_test_json();
+        let file_size = json.len() as u64;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let iterator =
+            InstagramMessageIterator::new(reader, file_size, StreamingConfig::default()).unwrap();
+
+        assert_eq!(iterator.total_bytes(), Some(file_size));
+    }
+
+    // =========================================================================
+    // Error handling tests
+    // =========================================================================
+
+    #[test]
+    fn test_no_messages_array() {
+        let json = r#"{"participants": []}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let result =
+            InstagramMessageIterator::new(reader, json.len() as u64, StreamingConfig::default());
+
+        assert!(result.is_err());
+        // Verify it's an InvalidFormat error
+        if let Err(StreamingError::InvalidFormat(msg)) = result {
+            assert!(msg.contains("messages"));
+        } else {
+            panic!("Expected InvalidFormat error");
+        }
+    }
+
+    #[test]
+    fn test_skip_invalid_messages() {
+        let json = r#"{
+  "participants": [],
+  "messages": [
+    {"invalid": "json message"},
+    {"sender_name": "user", "timestamp_ms": 1705315800000, "content": "Valid!"}
+  ]
+}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let config = StreamingConfig::default().with_skip_invalid(true);
+        let mut iterator =
+            InstagramMessageIterator::new(reader, json.len() as u64, config).unwrap();
+
+        let messages: Vec<_> = iterator.by_ref().filter_map(Result::ok).collect();
+
+        // Should skip invalid and return valid message
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].content, "Valid!");
+    }
+
+    #[test]
+    fn test_invalid_message_without_skip() {
+        let json = r#"{
+  "participants": [],
+  "messages": [
+    {"sender_name": 12345}
+  ]
+}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let config = StreamingConfig::default().with_skip_invalid(false);
+        let mut iterator =
+            InstagramMessageIterator::new(reader, json.len() as u64, config).unwrap();
+
+        // First message should be an error
+        let first = iterator.next();
+        assert!(first.is_some());
+        assert!(first.unwrap().is_err());
+    }
+
+    // =========================================================================
+    // Content type tests
+    // =========================================================================
 
     #[test]
     fn test_fix_encoding() {
@@ -344,5 +512,88 @@ mod tests {
 
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].content, "Check this out!");
+    }
+
+    #[test]
+    fn test_multiline_message() {
+        let json = r#"{
+  "participants": [],
+  "messages": [
+    {
+      "sender_name": "user",
+      "timestamp_ms": 1705315800000,
+      "content": "Line1\nLine2\nLine3"
+    }
+  ]
+}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let mut iterator =
+            InstagramMessageIterator::new(reader, json.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.by_ref().filter_map(Result::ok).collect();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].content.contains("Line1"));
+    }
+
+    #[test]
+    fn test_iterator_finished_returns_none() {
+        let json = r#"{"participants": [], "messages": [{"sender_name": "user", "timestamp_ms": 1000, "content": "Hi"}]}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let mut iterator =
+            InstagramMessageIterator::new(reader, json.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        // Consume all messages
+        let _: Vec<_> = iterator.by_ref().collect();
+
+        // Additional calls should return None
+        assert!(iterator.next().is_none());
+        assert!(iterator.next().is_none());
+    }
+
+    #[test]
+    fn test_messages_with_commas_between() {
+        let json = r#"{
+  "participants": [],
+  "messages": [
+    {"sender_name": "user1", "timestamp_ms": 1000, "content": "First"},
+    ,
+    {"sender_name": "user2", "timestamp_ms": 2000, "content": "Second"}
+  ]
+}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let config = StreamingConfig::default().with_skip_invalid(true);
+        let mut iterator =
+            InstagramMessageIterator::new(reader, json.len() as u64, config).unwrap();
+
+        let messages: Vec<_> = iterator.by_ref().filter_map(Result::ok).collect();
+        assert_eq!(messages.len(), 2);
+    }
+
+    #[test]
+    fn test_message_without_content_skipped() {
+        let json = r#"{
+  "participants": [],
+  "messages": [
+    {"sender_name": "user", "timestamp_ms": 1000}
+  ]
+}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let mut iterator =
+            InstagramMessageIterator::new(reader, json.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.by_ref().filter_map(Result::ok).collect();
+        // Message without content should be skipped
+        assert!(messages.is_empty());
     }
 }
