@@ -18,11 +18,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Seek};
 use std::path::Path;
 
-use chrono::{TimeZone, Utc};
-use serde::Deserialize;
-
 use crate::Message;
 use crate::error::ChatpackError;
+use crate::parsing::instagram::{InstagramRawMessage, parse_instagram_message};
 
 use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
 
@@ -210,48 +208,12 @@ impl<R: BufRead + Seek> InstagramMessageIterator<R> {
         }
     }
 
-    /// Parses a JSON string into a Message.
-    fn parse_message(json_str: &str) -> StreamingResult<Option<Message>> {
+    /// Parses a JSON string into a Message using shared parsing logic.
+    fn parse_message_from_json(json_str: &str) -> StreamingResult<Option<Message>> {
         let msg: InstagramRawMessage = serde_json::from_str(json_str)?;
-
-        // Get content from various possible locations
-        let content = msg
-            .content
-            .or_else(|| msg.share.as_ref().and_then(|s| s.share_text.clone()))
-            .map(|s| fix_encoding(&s));
-
-        // Skip messages without content
-        let content = match content {
-            Some(c) if !c.trim().is_empty() => c,
-            _ => return Ok(None),
-        };
-
-        // Fix encoding on sender name
-        let sender = fix_encoding(&msg.sender_name);
-
-        // Parse timestamp (milliseconds to DateTime)
-        let timestamp = Utc.timestamp_millis_opt(msg.timestamp_ms).single();
-
-        Ok(Some(Message::with_metadata(
-            sender, content, timestamp, None, // Instagram doesn't have message IDs in export
-            None, // No reply references
-            None, // No edit timestamps
-        )))
+        // Streaming always fixes encoding
+        Ok(parse_instagram_message(&msg, true))
     }
-}
-
-/// Fix Meta's broken encoding (Mojibake).
-///
-/// Meta exports UTF-8 text encoded as if it were ISO-8859-1.
-/// Each UTF-8 byte is stored as a separate Unicode codepoint.
-/// Example: "Привет" becomes "ÐŸÑ€Ð¸Ð²ÐµÑ‚"
-///
-/// This function reverses that process by:
-/// 1. Taking each char as its byte value
-/// 2. Reconstructing the original UTF-8 string
-fn fix_encoding(s: &str) -> String {
-    let bytes: Vec<u8> = s.chars().map(|c| c as u8).collect();
-    String::from_utf8(bytes).unwrap_or_else(|_| s.to_string())
 }
 
 impl<R: BufRead + Seek + Send> MessageIterator for InstagramMessageIterator<R> {
@@ -282,7 +244,7 @@ impl<R: BufRead + Seek + Send> Iterator for InstagramMessageIterator<R> {
         loop {
             match self.read_next_object() {
                 Ok(Some(json_str)) => {
-                    match Self::parse_message(&json_str) {
+                    match Self::parse_message_from_json(&json_str) {
                         Ok(Some(msg)) => return Some(Ok(msg)),
                         Ok(None) => {} // Skip messages without content, try next
                         Err(_) if self.config.skip_invalid => {} // Skip invalid
@@ -297,52 +259,10 @@ impl<R: BufRead + Seek + Send> Iterator for InstagramMessageIterator<R> {
     }
 }
 
-/// Raw message structure for deserialization.
-// Add #[allow(dead_code)] to the structs causing warnings
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct InstagramRawMessage {
-    sender_name: String,
-    timestamp_ms: i64,
-    content: Option<String>,
-    share: Option<InstagramShare>,
-    #[serde(default)]
-    photos: Option<Vec<InstagramPhoto>>,
-    #[serde(default)]
-    videos: Option<Vec<InstagramVideo>>,
-    #[serde(default)]
-    audio_files: Option<Vec<InstagramAudio>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct InstagramShare {
-    share_text: Option<String>,
-    link: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct InstagramPhoto {
-    uri: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct InstagramVideo {
-    uri: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct InstagramAudio {
-    uri: Option<String>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parsing::instagram::fix_mojibake_encoding;
     use std::io::Cursor;
 
     fn create_test_json() -> String {
@@ -396,11 +316,7 @@ mod tests {
     #[test]
     fn test_fix_encoding() {
         // Test that normal ASCII passes through
-        assert_eq!(fix_encoding("Hello"), "Hello");
-
-        // Test that already correct UTF-8 might get corrupted (this is expected
-        // since we can't distinguish between mojibake and intentional Latin-1)
-        // The fix_encoding is only meant for Meta's specific encoding issue
+        assert_eq!(fix_mojibake_encoding("Hello"), "Hello");
     }
 
     #[test]

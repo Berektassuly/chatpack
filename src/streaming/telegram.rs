@@ -18,12 +18,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Seek};
 use std::path::Path;
 
-use chrono::DateTime;
-use serde::Deserialize;
-use serde_json::Value;
-
 use crate::Message;
 use crate::error::ChatpackError;
+use crate::parsing::telegram::{TelegramRawMessage, parse_telegram_message};
 
 use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
 
@@ -211,49 +208,10 @@ impl<R: BufRead + Seek> TelegramMessageIterator<R> {
         }
     }
 
-    /// Parses a JSON string into a Message.
-    fn parse_message(json_str: &str) -> StreamingResult<Option<Message>> {
+    /// Parses a JSON string into a Message using shared parsing logic.
+    fn parse_message_from_json(json_str: &str) -> StreamingResult<Option<Message>> {
         let msg: TelegramRawMessage = serde_json::from_str(json_str)?;
-
-        // Skip non-message types
-        if msg.msg_type != "message" {
-            return Ok(None);
-        }
-
-        let Some(sender) = msg.from else {
-            return Ok(None);
-        };
-        let content = match msg.text {
-            Some(text) => extract_text(&text),
-            None => return Ok(None),
-        };
-
-        if content.trim().is_empty() {
-            return Ok(None);
-        }
-
-        let timestamp = msg.date_unixtime.as_ref().and_then(|ts_str| {
-            ts_str
-                .parse::<i64>()
-                .ok()
-                .and_then(|ts| DateTime::from_timestamp(ts, 0))
-        });
-
-        let edited = msg.edited_unixtime.as_ref().and_then(|ts_str| {
-            ts_str
-                .parse::<i64>()
-                .ok()
-                .and_then(|ts| DateTime::from_timestamp(ts, 0))
-        });
-
-        Ok(Some(Message::with_metadata(
-            sender,
-            content,
-            timestamp,
-            msg.id,
-            msg.reply_to_message_id,
-            edited,
-        )))
+        Ok(parse_telegram_message(&msg))
     }
 }
 
@@ -285,7 +243,7 @@ impl<R: BufRead + Seek + Send> Iterator for TelegramMessageIterator<R> {
         loop {
             match self.read_next_object() {
                 Ok(Some(json_str)) => {
-                    match Self::parse_message(&json_str) {
+                    match Self::parse_message_from_json(&json_str) {
                         Ok(Some(msg)) => return Some(Ok(msg)),
                         Ok(None) => {} // Skip non-messages, try next
                         Err(_) if self.config.skip_invalid => {} // Skip invalid
@@ -300,41 +258,10 @@ impl<R: BufRead + Seek + Send> Iterator for TelegramMessageIterator<R> {
     }
 }
 
-/// Raw message structure for deserialization.
-#[derive(Debug, Deserialize)]
-struct TelegramRawMessage {
-    id: Option<u64>,
-    #[serde(rename = "type")]
-    msg_type: String,
-    date_unixtime: Option<String>,
-    from: Option<String>,
-    text: Option<Value>,
-    reply_to_message_id: Option<u64>,
-    edited_unixtime: Option<String>,
-}
-
-/// Extracts text content from Telegram's complex text field.
-fn extract_text(text_value: &Value) -> String {
-    match text_value {
-        Value::String(s) => s.clone(),
-        Value::Array(arr) => arr
-            .iter()
-            .filter_map(|item| match item {
-                Value::String(s) => Some(s.clone()),
-                Value::Object(obj) => obj
-                    .get("text")
-                    .and_then(|v| v.as_str())
-                    .map(ToString::to_string),
-                _ => None,
-            })
-            .collect::<String>(),
-        _ => String::new(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parsing::telegram::extract_telegram_text;
     use std::io::Cursor;
 
     fn create_test_json() -> String {
@@ -394,7 +321,7 @@ mod tests {
             {"type": "bold", "text": "world"},
             "!"
         ]);
-        assert_eq!(extract_text(&value), "Hello, world!");
+        assert_eq!(extract_telegram_text(&value), "Hello, world!");
     }
 
     #[test]

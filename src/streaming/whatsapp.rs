@@ -13,11 +13,14 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use regex::Regex;
 
 use crate::Message;
 use crate::error::ChatpackError;
+use crate::parsing::whatsapp::{
+    DateFormat, detect_whatsapp_format_owned, is_whatsapp_system_message, parse_whatsapp_timestamp,
+};
 
 use super::{MessageIterator, StreamingConfig, StreamingParser, StreamingResult};
 
@@ -65,65 +68,6 @@ impl StreamingParser for WhatsAppStreamingParser {
     }
 }
 
-/// Detected date format variants.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum DateFormat {
-    US,
-    EuDotBracketed,
-    EuDotNoBracket,
-    EuSlash,
-    EuSlashBracketed,
-}
-
-impl DateFormat {
-    fn pattern(self) -> &'static str {
-        match self {
-            DateFormat::US => {
-                r"^\[(\d{1,2}/\d{1,2}/\d{2,4}),\s(\d{1,2}:\d{2}(?::\d{2})?(?:\s?[APap][Mm])?)\]\s([^:]+):\s?(.*)"
-            }
-            DateFormat::EuDotBracketed => {
-                r"^\[(\d{2}\.\d{2}\.\d{2,4}),\s(\d{2}:\d{2}(?::\d{2})?)\]\s([^:]+):\s?(.*)"
-            }
-            DateFormat::EuDotNoBracket => {
-                r"^(\d{2}\.\d{2}\.\d{2,4}),\s(\d{2}:\d{2}(?::\d{2})?)\s-\s([^:]+):\s?(.*)"
-            }
-            DateFormat::EuSlash => {
-                r"^(\d{2}/\d{2}/\d{2,4}),\s(\d{2}:\d{2}(?::\d{2})?)\s-\s([^:]+):\s?(.*)"
-            }
-            DateFormat::EuSlashBracketed => {
-                r"^\[(\d{2}/\d{2}/\d{2,4}),\s(\d{2}:\d{2}(?::\d{2})?)\]\s([^:]+):\s?(.*)"
-            }
-        }
-    }
-
-    fn date_parse_formats(self) -> &'static [&'static str] {
-        match self {
-            DateFormat::US => &[
-                "%m/%d/%y, %I:%M:%S %p",
-                "%m/%d/%y, %I:%M %p",
-                "%m/%d/%Y, %I:%M:%S %p",
-                "%m/%d/%Y, %I:%M %p",
-                "%m/%d/%y, %H:%M:%S",
-                "%m/%d/%y, %H:%M",
-                "%m/%d/%Y, %H:%M:%S",
-                "%m/%d/%Y, %H:%M",
-            ],
-            DateFormat::EuDotBracketed | DateFormat::EuDotNoBracket => &[
-                "%d.%m.%y, %H:%M:%S",
-                "%d.%m.%y, %H:%M",
-                "%d.%m.%Y, %H:%M:%S",
-                "%d.%m.%Y, %H:%M",
-            ],
-            DateFormat::EuSlash | DateFormat::EuSlashBracketed => &[
-                "%d/%m/%y, %H:%M:%S",
-                "%d/%m/%y, %H:%M",
-                "%d/%m/%Y, %H:%M:%S",
-                "%d/%m/%Y, %H:%M",
-            ],
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 struct PendingMessage {
     sender: String,
@@ -145,7 +89,7 @@ impl PendingMessage {
             return None;
         }
 
-        if is_system_message(&self.sender, &self.content) {
+        if is_whatsapp_system_message(&self.sender, &self.content) {
             return None;
         }
 
@@ -158,77 +102,6 @@ impl PendingMessage {
             None,
         ))
     }
-}
-
-fn is_system_message(sender: &str, content: &str) -> bool {
-    let system_indicators_en = [
-        "Messages and calls are end-to-end encrypted",
-        "created group",
-        "added",
-        "removed",
-        "left",
-        "changed the subject",
-        "changed this group's icon",
-        "changed the group description",
-        "deleted this group's icon",
-        "changed their phone number",
-        "joined using this group's invite link",
-        "security code changed",
-        "You're now an admin",
-        "is now an admin",
-        "disappeared",
-        "turned on disappearing messages",
-        "turned off disappearing messages",
-    ];
-
-    let system_indicators_ru = [
-        "Сообщения и звонки защищены сквозным шифрованием",
-        "создал(а) группу",
-        "добавил",
-        "удалил",
-        "вышел",
-        "покинул",
-        "изменил тему",
-        "изменил иконку группы",
-        "изменил описание группы",
-        "удалил иконку группы",
-        "изменил номер телефона",
-        "присоединился по ссылке",
-        "код безопасности изменён",
-        "теперь администратор",
-        "включил исчезающие сообщения",
-        "выключил исчезающие сообщения",
-        "Подробнее",
-    ];
-
-    let content_lower = content.to_lowercase();
-    let sender_lower = sender.to_lowercase();
-
-    for indicator in &system_indicators_en {
-        if content_lower.contains(&indicator.to_lowercase()) {
-            return true;
-        }
-    }
-
-    for indicator in &system_indicators_ru {
-        if content.contains(indicator) {
-            return true;
-        }
-    }
-
-    sender.trim().is_empty() || sender_lower.contains("whatsapp") || sender_lower.contains("system")
-}
-
-fn parse_timestamp(date_str: &str, time_str: &str, format: DateFormat) -> Option<DateTime<Utc>> {
-    let datetime_str = format!("{}, {}", date_str, time_str);
-
-    for parse_format in format.date_parse_formats() {
-        if let Ok(naive) = NaiveDateTime::parse_from_str(&datetime_str, parse_format) {
-            return Some(naive.and_utc());
-        }
-    }
-
-    None
 }
 
 /// Iterator over WhatsApp messages.
@@ -261,7 +134,7 @@ impl<R: BufRead> WhatsAppMessageIterator<R> {
             sample_lines.push(line);
         }
 
-        let detected_format = detect_format(&sample_lines);
+        let detected_format = detect_whatsapp_format_owned(&sample_lines);
         let format_regex = detected_format.map(|f| Regex::new(f.pattern()).unwrap());
 
         let mut iter = Self {
@@ -307,7 +180,7 @@ impl<R: BufRead> WhatsAppMessageIterator<R> {
 
                 self.pending.sender = sender.to_string();
                 self.pending.content = content.to_string();
-                self.pending.timestamp = parse_timestamp(date_str, time_str, format);
+                self.pending.timestamp = parse_whatsapp_timestamp(date_str, time_str, format);
                 return;
             }
         }
@@ -328,36 +201,6 @@ impl<R: BufRead> WhatsAppMessageIterator<R> {
         self.bytes_read += bytes as u64;
         Ok(Some(self.line_buffer.clone()))
     }
-}
-
-fn detect_format(lines: &[String]) -> Option<DateFormat> {
-    let formats = [
-        DateFormat::US,
-        DateFormat::EuDotBracketed,
-        DateFormat::EuDotNoBracket,
-        DateFormat::EuSlash,
-        DateFormat::EuSlashBracketed,
-    ];
-
-    let mut scores = [0usize; 5];
-
-    for line in lines {
-        for (i, format) in formats.iter().enumerate() {
-            if let Ok(regex) = Regex::new(format.pattern()) {
-                if regex.is_match(line) {
-                    scores[i] += 1;
-                }
-            }
-        }
-    }
-
-    let max_score = *scores.iter().max()?;
-    if max_score == 0 {
-        return None;
-    }
-
-    let winner_idx = scores.iter().position(|&s| s == max_score)?;
-    Some(formats[winner_idx])
 }
 
 impl<R: BufRead + Send> MessageIterator for WhatsAppMessageIterator<R> {
@@ -511,12 +354,15 @@ This is a continuation line
 
     #[test]
     fn test_system_message_detection() {
-        assert!(is_system_message(
+        assert!(is_whatsapp_system_message(
             "Alice",
             "Messages and calls are end-to-end encrypted"
         ));
-        assert!(!is_system_message("Alice", "Hello everyone!"));
-        assert!(is_system_message("Bob", "added Charlie to the group"));
+        assert!(!is_whatsapp_system_message("Alice", "Hello everyone!"));
+        assert!(is_whatsapp_system_message(
+            "Bob",
+            "added Charlie to the group"
+        ));
     }
 
     #[test]
@@ -525,7 +371,7 @@ This is a continuation line
             "[1/15/24, 10:30:45 AM] Alice: Hello".to_string(),
             "[1/15/24, 10:31:00 AM] Bob: Hi there".to_string(),
         ];
-        assert_eq!(detect_format(&lines), Some(DateFormat::US));
+        assert_eq!(detect_whatsapp_format_owned(&lines), Some(DateFormat::US));
     }
 
     #[test]
@@ -534,7 +380,10 @@ This is a continuation line
             "[15.01.24, 10:30:45] Alice: Hello".to_string(),
             "[15.01.24, 10:31:00] Bob: Hi there".to_string(),
         ];
-        assert_eq!(detect_format(&lines), Some(DateFormat::EuDotBracketed));
+        assert_eq!(
+            detect_whatsapp_format_owned(&lines),
+            Some(DateFormat::EuDotBracketed)
+        );
     }
 
     #[test]

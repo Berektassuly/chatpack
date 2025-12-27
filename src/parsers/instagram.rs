@@ -9,42 +9,14 @@
 use std::fs;
 use std::path::Path;
 
-use chrono::{TimeZone, Utc};
-use serde::Deserialize;
-
 use crate::Message;
 use crate::config::InstagramConfig;
 use crate::error::ChatpackError;
 use crate::parser::{Parser, Platform};
+use crate::parsing::instagram::{InstagramExport, parse_instagram_message};
 
 #[cfg(feature = "streaming")]
 use crate::streaming::{InstagramStreamingParser, StreamingConfig, StreamingParser};
-
-#[derive(Debug, Deserialize)]
-struct InstagramExport {
-    messages: Vec<InstagramMessage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct InstagramMessage {
-    sender_name: String,
-    timestamp_ms: i64,
-    content: Option<String>,
-}
-
-/// Fix Meta's broken encoding (Mojibake).
-///
-/// Meta exports UTF-8 text encoded as if it were ISO-8859-1.
-/// Each UTF-8 byte is stored as a separate Unicode codepoint.
-/// Example: "Привет" becomes "ÐŸÑ€Ð¸Ð²ÐµÑ‚"
-///
-/// This function reverses that process by:
-/// 1. Taking each char as its byte value
-/// 2. Reconstructing the original UTF-8 string
-fn fix_encoding(s: &str) -> String {
-    let bytes: Vec<u8> = s.chars().map(|c| c as u8).collect();
-    String::from_utf8(bytes).unwrap_or_else(|_| s.to_string())
-}
 
 /// Parser for Instagram JSON exports.
 ///
@@ -94,37 +66,8 @@ impl InstagramParser {
         let fix = self.config.fix_encoding;
         let mut messages: Vec<Message> = export
             .messages
-            .into_iter()
-            .filter_map(|msg| {
-                // Skip messages without content (shares, reactions without text, etc.)
-                let msg_content = msg.content?;
-                if msg_content.is_empty() {
-                    return None;
-                }
-
-                let timestamp = Utc.timestamp_millis_opt(msg.timestamp_ms).single()?;
-
-                let sender = if fix {
-                    fix_encoding(&msg.sender_name)
-                } else {
-                    msg.sender_name
-                };
-
-                let content = if fix {
-                    fix_encoding(&msg_content)
-                } else {
-                    msg_content
-                };
-
-                Some(Message {
-                    id: None,
-                    timestamp: Some(timestamp),
-                    sender,
-                    reply_to: None,
-                    edited: None,
-                    content,
-                })
-            })
+            .iter()
+            .filter_map(|msg| parse_instagram_message(msg, fix))
             .collect();
 
         // Instagram stores messages newest-first, reverse for chronological order

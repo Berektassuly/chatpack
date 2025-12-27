@@ -6,9 +6,7 @@
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 use chatpack::core::output::{to_csv, to_json, to_jsonl};
-use chatpack::core::{
-    FilterConfig, InternalMessage, OutputConfig, apply_filters, merge_consecutive,
-};
+use chatpack::core::{FilterConfig, Message, OutputConfig, apply_filters, merge_consecutive};
 use chatpack::parser::Parser;
 use chatpack::parsers::{DiscordParser, InstagramParser, TelegramParser, WhatsAppParser};
 
@@ -81,7 +79,7 @@ fn generate_discord_json(count: usize) -> String {
     )
 }
 
-fn generate_messages(count: usize) -> Vec<InternalMessage> {
+fn generate_messages(count: usize) -> Vec<Message> {
     let base_time = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
     (0..count)
         .map(|i| {
@@ -91,7 +89,7 @@ fn generate_messages(count: usize) -> Vec<InternalMessage> {
                 "Bob".to_string()
             };
             let ts = base_time + Duration::minutes(i as i64);
-            InternalMessage::with_metadata(
+            Message::with_metadata(
                 sender,
                 format!("Message number {}", i),
                 Some(ts),
@@ -226,10 +224,10 @@ fn bench_filter_by_date(c: &mut Criterion) {
     let base_time = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
 
     for size in [100_usize, 1_000, 10_000, 100_000] {
-        let messages: Vec<InternalMessage> = (0..size)
+        let messages: Vec<Message> = (0..size)
             .map(|i| {
                 let ts = base_time - Duration::hours(i as i64);
-                InternalMessage::with_metadata(
+                Message::with_metadata(
                     "Alice".to_string(),
                     format!("Message {}", i),
                     Some(ts),
