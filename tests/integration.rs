@@ -1,6 +1,7 @@
 //! Integration tests for parsers with real files
 
 use chatpack::core::{FilterConfig, ProcessingStats};
+use chatpack::parser::{Platform, create_parser};
 use chatpack::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -260,9 +261,9 @@ mod discord_tests {
     #[test]
     fn test_parse_json() {
         ensure_fixtures();
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         let messages = parser
-            .parse(&format!("{}/discord.json", fixtures_dir()))
+            .parse_file(&format!("{}/discord.json", fixtures_dir()))
             .unwrap();
 
         assert_eq!(messages.len(), 3);
@@ -275,9 +276,9 @@ mod discord_tests {
     #[test]
     fn test_parse_json_with_metadata() {
         ensure_fixtures();
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         let messages = parser
-            .parse(&format!("{}/discord.json", fixtures_dir()))
+            .parse_file(&format!("{}/discord.json", fixtures_dir()))
             .unwrap();
 
         // Check reply reference
@@ -296,9 +297,9 @@ mod discord_tests {
     #[test]
     fn test_parse_json_nickname_fallback() {
         ensure_fixtures();
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         let messages = parser
-            .parse(&format!("{}/discord.json", fixtures_dir()))
+            .parse_file(&format!("{}/discord.json", fixtures_dir()))
             .unwrap();
 
         // Alice has nickname
@@ -310,9 +311,9 @@ mod discord_tests {
     #[test]
     fn test_parse_txt() {
         ensure_fixtures();
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         let messages = parser
-            .parse(&format!("{}/discord.txt", fixtures_dir()))
+            .parse_file(&format!("{}/discord.txt", fixtures_dir()))
             .unwrap();
 
         assert!(!messages.is_empty());
@@ -323,9 +324,9 @@ mod discord_tests {
     #[test]
     fn test_parse_txt_attachments() {
         ensure_fixtures();
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         let messages = parser
-            .parse(&format!("{}/discord.txt", fixtures_dir()))
+            .parse_file(&format!("{}/discord.txt", fixtures_dir()))
             .unwrap();
 
         let has_attachment = messages.iter().any(|m| m.content.contains("[Attachment:"));
@@ -335,9 +336,9 @@ mod discord_tests {
     #[test]
     fn test_parse_csv() {
         ensure_fixtures();
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         let messages = parser
-            .parse(&format!("{}/discord.csv", fixtures_dir()))
+            .parse_file(&format!("{}/discord.csv", fixtures_dir()))
             .unwrap();
 
         assert_eq!(messages.len(), 3);
@@ -348,9 +349,9 @@ mod discord_tests {
     #[test]
     fn test_parse_csv_attachments() {
         ensure_fixtures();
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         let messages = parser
-            .parse(&format!("{}/discord.csv", fixtures_dir()))
+            .parse_file(&format!("{}/discord.csv", fixtures_dir()))
             .unwrap();
 
         let has_attachment = messages.iter().any(|m| m.content.contains("[Attachment:"));
@@ -359,16 +360,16 @@ mod discord_tests {
 
     #[test]
     fn test_parser_name() {
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         assert_eq!(parser.name(), "Discord");
     }
 
     #[test]
     fn test_consecutive_merge() {
         ensure_fixtures();
-        let parser = create_parser(Source::Discord);
+        let parser = create_parser(Platform::Discord);
         let messages = parser
-            .parse(&format!("{}/discord.json", fixtures_dir()))
+            .parse_file(&format!("{}/discord.json", fixtures_dir()))
             .unwrap();
 
         let original = messages.len();
@@ -388,9 +389,9 @@ mod telegram_tests {
     #[test]
     fn test_parse_simple_chat() {
         ensure_fixtures();
-        let parser = create_parser(Source::Telegram);
+        let parser = create_parser(Platform::Telegram);
         let messages = parser
-            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .parse_file(&format!("{}/telegram_simple.json", fixtures_dir()))
             .unwrap();
 
         assert_eq!(messages.len(), 4);
@@ -403,9 +404,9 @@ mod telegram_tests {
     #[test]
     fn test_parse_complex_chat() {
         ensure_fixtures();
-        let parser = create_parser(Source::Telegram);
+        let parser = create_parser(Platform::Telegram);
         let messages = parser
-            .parse(&format!("{}/telegram_complex.json", fixtures_dir()))
+            .parse_file(&format!("{}/telegram_complex.json", fixtures_dir()))
             .unwrap();
 
         assert!(messages.len() >= 2);
@@ -421,9 +422,9 @@ mod telegram_tests {
     #[test]
     fn test_merge_consecutive() {
         ensure_fixtures();
-        let parser = create_parser(Source::Telegram);
+        let parser = create_parser(Platform::Telegram);
         let messages = parser
-            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .parse_file(&format!("{}/telegram_simple.json", fixtures_dir()))
             .unwrap();
 
         let original_count = messages.len();
@@ -434,7 +435,7 @@ mod telegram_tests {
 
     #[test]
     fn test_parser_name() {
-        let parser = create_parser(Source::Telegram);
+        let parser = create_parser(Platform::Telegram);
         assert_eq!(parser.name(), "Telegram");
     }
 }
@@ -449,9 +450,9 @@ mod whatsapp_tests {
     #[test]
     fn test_parse_us_format() {
         ensure_fixtures();
-        let parser = create_parser(Source::WhatsApp);
+        let parser = create_parser(Platform::WhatsApp);
         let messages = parser
-            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .parse_file(&format!("{}/whatsapp_us.txt", fixtures_dir()))
             .unwrap();
 
         assert!(!messages.is_empty());
@@ -464,9 +465,9 @@ mod whatsapp_tests {
     #[test]
     fn test_parse_eu_format() {
         ensure_fixtures();
-        let parser = create_parser(Source::WhatsApp);
+        let parser = create_parser(Platform::WhatsApp);
         let messages = parser
-            .parse(&format!("{}/whatsapp_eu.txt", fixtures_dir()))
+            .parse_file(&format!("{}/whatsapp_eu.txt", fixtures_dir()))
             .unwrap();
 
         assert!(!messages.is_empty());
@@ -477,9 +478,9 @@ mod whatsapp_tests {
     #[test]
     fn test_system_messages_filtered() {
         ensure_fixtures();
-        let parser = create_parser(Source::WhatsApp);
+        let parser = create_parser(Platform::WhatsApp);
         let messages = parser
-            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .parse_file(&format!("{}/whatsapp_us.txt", fixtures_dir()))
             .unwrap();
 
         let has_system = messages.iter().any(|m| {
@@ -491,9 +492,9 @@ mod whatsapp_tests {
     #[test]
     fn test_media_preserved() {
         ensure_fixtures();
-        let parser = create_parser(Source::WhatsApp);
+        let parser = create_parser(Platform::WhatsApp);
         let messages = parser
-            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .parse_file(&format!("{}/whatsapp_us.txt", fixtures_dir()))
             .unwrap();
 
         let has_media = messages.iter().any(|m| m.content.contains("Media omitted"));
@@ -502,16 +503,16 @@ mod whatsapp_tests {
 
     #[test]
     fn test_parser_name() {
-        let parser = create_parser(Source::WhatsApp);
+        let parser = create_parser(Platform::WhatsApp);
         assert_eq!(parser.name(), "WhatsApp");
     }
 
     #[test]
     fn test_consecutive_merge() {
         ensure_fixtures();
-        let parser = create_parser(Source::WhatsApp);
+        let parser = create_parser(Platform::WhatsApp);
         let messages = parser
-            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .parse_file(&format!("{}/whatsapp_us.txt", fixtures_dir()))
             .unwrap();
 
         let original = messages.len();
@@ -531,9 +532,9 @@ mod instagram_tests {
     #[test]
     fn test_parse_instagram() {
         ensure_fixtures();
-        let parser = create_parser(Source::Instagram);
+        let parser = create_parser(Platform::Instagram);
         let messages = parser
-            .parse(&format!("{}/instagram.json", fixtures_dir()))
+            .parse_file(&format!("{}/instagram.json", fixtures_dir()))
             .unwrap();
 
         assert!(!messages.is_empty());
@@ -546,9 +547,9 @@ mod instagram_tests {
     #[test]
     fn test_shared_links() {
         ensure_fixtures();
-        let parser = create_parser(Source::Instagram);
+        let parser = create_parser(Platform::Instagram);
         let messages = parser
-            .parse(&format!("{}/instagram.json", fixtures_dir()))
+            .parse_file(&format!("{}/instagram.json", fixtures_dir()))
             .unwrap();
 
         let has_shared = messages.iter().any(|m| {
@@ -560,9 +561,9 @@ mod instagram_tests {
     #[test]
     fn test_empty_content_filtered() {
         ensure_fixtures();
-        let parser = create_parser(Source::Instagram);
+        let parser = create_parser(Platform::Instagram);
         let messages = parser
-            .parse(&format!("{}/instagram.json", fixtures_dir()))
+            .parse_file(&format!("{}/instagram.json", fixtures_dir()))
             .unwrap();
 
         let has_empty = messages.iter().any(|m| m.content.is_empty());
@@ -571,16 +572,16 @@ mod instagram_tests {
 
     #[test]
     fn test_parser_name() {
-        let parser = create_parser(Source::Instagram);
+        let parser = create_parser(Platform::Instagram);
         assert_eq!(parser.name(), "Instagram");
     }
 
     #[test]
     fn test_timestamps() {
         ensure_fixtures();
-        let parser = create_parser(Source::Instagram);
+        let parser = create_parser(Platform::Instagram);
         let messages = parser
-            .parse(&format!("{}/instagram.json", fixtures_dir()))
+            .parse_file(&format!("{}/instagram.json", fixtures_dir()))
             .unwrap();
 
         assert!(messages.iter().all(|m| m.timestamp.is_some()));
@@ -597,9 +598,9 @@ mod filter_integration_tests {
     #[test]
     fn test_filter_by_sender() {
         ensure_fixtures();
-        let parser = create_parser(Source::Telegram);
+        let parser = create_parser(Platform::Telegram);
         let messages = parser
-            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .parse_file(&format!("{}/telegram_simple.json", fixtures_dir()))
             .unwrap();
 
         let config = FilterConfig::new().with_user("Alice".to_string());
@@ -611,9 +612,9 @@ mod filter_integration_tests {
     #[test]
     fn test_filter_by_date() {
         ensure_fixtures();
-        let parser = create_parser(Source::Telegram);
+        let parser = create_parser(Platform::Telegram);
         let messages = parser
-            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .parse_file(&format!("{}/telegram_simple.json", fixtures_dir()))
             .unwrap();
 
         let config = FilterConfig::new()
@@ -629,9 +630,9 @@ mod filter_integration_tests {
     #[test]
     fn test_filter_excludes_outside_range() {
         ensure_fixtures();
-        let parser = create_parser(Source::Telegram);
+        let parser = create_parser(Platform::Telegram);
         let messages = parser
-            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .parse_file(&format!("{}/telegram_simple.json", fixtures_dir()))
             .unwrap();
 
         let config = FilterConfig::new().before_date("2024-01-01").unwrap();
@@ -643,9 +644,9 @@ mod filter_integration_tests {
     #[test]
     fn test_combined_filters() {
         ensure_fixtures();
-        let parser = create_parser(Source::WhatsApp);
+        let parser = create_parser(Platform::WhatsApp);
         let messages = parser
-            .parse(&format!("{}/whatsapp_us.txt", fixtures_dir()))
+            .parse_file(&format!("{}/whatsapp_us.txt", fixtures_dir()))
             .unwrap();
 
         let config = FilterConfig::new().with_user("Alice".to_string());
@@ -669,9 +670,9 @@ mod stats_tests {
     #[test]
     fn test_stats_with_real_data() {
         ensure_fixtures();
-        let parser = create_parser(Source::Telegram);
+        let parser = create_parser(Platform::Telegram);
         let messages = parser
-            .parse(&format!("{}/telegram_simple.json", fixtures_dir()))
+            .parse_file(&format!("{}/telegram_simple.json", fixtures_dir()))
             .unwrap();
 
         let original = messages.len();
@@ -929,8 +930,8 @@ mod error_tests {
 
     #[test]
     fn test_parse_nonexistent_file() {
-        let parser = create_parser(Source::Telegram);
-        let result = parser.parse("nonexistent.json");
+        let parser = create_parser(Platform::Telegram);
+        let result = parser.parse_file("nonexistent.json");
         assert!(result.is_err());
     }
 
@@ -940,8 +941,8 @@ mod error_tests {
         let dir = fixtures_dir();
         fs::write(format!("{dir}/invalid.json"), "not valid json").unwrap();
 
-        let parser = create_parser(Source::Telegram);
-        let result = parser.parse(&format!("{dir}/invalid.json"));
+        let parser = create_parser(Platform::Telegram);
+        let result = parser.parse_file(&format!("{dir}/invalid.json"));
         assert!(result.is_err());
     }
 
