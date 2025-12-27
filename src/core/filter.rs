@@ -8,12 +8,12 @@
 //!
 //! ```rust
 //! use chatpack::core::filter::{FilterConfig, apply_filters};
-//! use chatpack::core::models::InternalMessage;
+//! use chatpack::Message;
 //!
 //! let messages = vec![
-//!     InternalMessage::new("Alice", "Hello"),
-//!     InternalMessage::new("Bob", "Hi there"),
-//!     InternalMessage::new("Alice", "How are you?"),
+//!     Message::new("Alice", "Hello"),
+//!     Message::new("Bob", "Hi there"),
+//!     Message::new("Alice", "How are you?"),
 //! ];
 //!
 //! // Filter to only Alice's messages
@@ -25,7 +25,8 @@
 
 use chrono::{DateTime, NaiveDate, Utc};
 
-use super::models::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 /// Configuration for filtering messages.
 ///
@@ -63,7 +64,7 @@ impl FilterConfig {
     ///
     /// # Errors
     ///
-    /// Returns [`FilterError::InvalidDateFormat`] if the date string
+    /// Returns [`ChatpackError::InvalidDate`] if the date string
     /// doesn't match YYYY-MM-DD format.
     ///
     /// # Example
@@ -75,7 +76,7 @@ impl FilterConfig {
     ///     .after_date("2024-01-01")
     ///     .unwrap();
     /// ```
-    pub fn after_date(mut self, date_str: &str) -> Result<Self, FilterError> {
+    pub fn after_date(mut self, date_str: &str) -> Result<Self, ChatpackError> {
         let dt = parse_date_start(date_str)?;
         self.after = Some(dt);
         Ok(self)
@@ -87,7 +88,7 @@ impl FilterConfig {
     ///
     /// # Errors
     ///
-    /// Returns [`FilterError::InvalidDateFormat`] if the date string
+    /// Returns [`ChatpackError::InvalidDate`] if the date string
     /// doesn't match YYYY-MM-DD format.
     ///
     /// # Example
@@ -99,9 +100,9 @@ impl FilterConfig {
     ///     .before_date("2024-12-31")
     ///     .unwrap();
     /// ```
-    pub fn before_date(mut self, date_str: &str) -> Result<Self, FilterError> {
+    pub fn before_date(mut self, date_str: &str) -> Result<Self, ChatpackError> {
         let naive = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-            .map_err(|_| FilterError::InvalidDateFormat(date_str.to_string()))?;
+            .map_err(|_| ChatpackError::invalid_date(date_str))?;
 
         // End of the day to include the full day
         let naive_dt = naive.and_hms_opt(23, 59, 59).unwrap();
@@ -164,29 +165,10 @@ impl FilterConfig {
     }
 }
 
-/// Errors that can occur during filtering.
-#[derive(Debug, Clone, PartialEq)]
-pub enum FilterError {
-    /// Invalid date format (expected YYYY-MM-DD)
-    InvalidDateFormat(String),
-}
-
-impl std::fmt::Display for FilterError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FilterError::InvalidDateFormat(s) => {
-                write!(f, "Invalid date format: '{s}'. Expected YYYY-MM-DD")
-            }
-        }
-    }
-}
-
-impl std::error::Error for FilterError {}
-
 /// Parse a date string in YYYY-MM-DD format to `DateTime`<Utc> at start of day.
-fn parse_date_start(date_str: &str) -> Result<DateTime<Utc>, FilterError> {
+fn parse_date_start(date_str: &str) -> Result<DateTime<Utc>, ChatpackError> {
     let naive = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-        .map_err(|_| FilterError::InvalidDateFormat(date_str.to_string()))?;
+        .map_err(|_| ChatpackError::invalid_date(date_str))?;
 
     // Start of the day
     let naive_dt = naive.and_hms_opt(0, 0, 0).unwrap();
@@ -210,23 +192,20 @@ fn parse_date_start(date_str: &str) -> Result<DateTime<Utc>, FilterError> {
 ///
 /// ```rust
 /// use chatpack::core::filter::{FilterConfig, apply_filters};
-/// use chatpack::core::models::InternalMessage;
+/// use chatpack::Message;
 ///
 /// let messages = vec![
-///     InternalMessage::new("Alice", "Hello"),
-///     InternalMessage::new("Bob", "Hi"),
+///     Message::new("Alice", "Hello"),
+///     Message::new("Bob", "Hi"),
 /// ];
 ///
 /// let config = FilterConfig::new().with_user("Alice".to_string());
 /// let filtered = apply_filters(messages, &config);
 ///
 /// assert_eq!(filtered.len(), 1);
-/// assert_eq!(filtered[0].sender, "Alice");
+/// assert_eq!(filtered[0].sender(), "Alice");
 /// ```
-pub fn apply_filters(
-    messages: Vec<InternalMessage>,
-    config: &FilterConfig,
-) -> Vec<InternalMessage> {
+pub fn apply_filters(messages: Vec<Message>, config: &FilterConfig) -> Vec<Message> {
     if !config.is_active() {
         return messages;
     }
@@ -269,8 +248,8 @@ mod tests {
     use super::*;
     use chrono::TimeZone;
 
-    fn make_msg(sender: &str, content: &str, ts: Option<&str>) -> InternalMessage {
-        let mut msg = InternalMessage::new(sender, content);
+    fn make_msg(sender: &str, content: &str, ts: Option<&str>) -> Message {
+        let mut msg = Message::new(sender, content);
         if let Some(ts_str) = ts {
             let naive = NaiveDate::parse_from_str(ts_str, "%Y-%m-%d").unwrap();
             msg.timestamp = Some(naive.and_hms_opt(12, 0, 0).unwrap().and_utc());
@@ -343,7 +322,10 @@ mod tests {
     fn test_invalid_date_format() {
         let result = FilterConfig::new().after_date("01-01-2024");
         assert!(result.is_err());
-        assert!(matches!(result, Err(FilterError::InvalidDateFormat(_))));
+        assert!(matches!(
+            result,
+            Err(ChatpackError::InvalidDate { .. })
+        ));
     }
 
     #[test]

@@ -1,6 +1,5 @@
 //! Telegram JSON export parser.
 
-use std::error::Error;
 use std::fs;
 
 use chrono::DateTime;
@@ -8,7 +7,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::ChatParser;
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 /// Parser for Telegram JSON exports.
 ///
@@ -74,12 +74,12 @@ impl ChatParser for TelegramParser {
         "Telegram"
     }
 
-    fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
         let content = fs::read_to_string(file_path)?;
         self.parse_str(&content)
     }
 
-    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let export: TelegramExport = serde_json::from_str(content)?;
 
         let messages = export
@@ -111,7 +111,7 @@ impl ChatParser for TelegramParser {
                         .and_then(|ts| DateTime::from_timestamp(ts, 0))
                 });
 
-                Some(InternalMessage::with_metadata(
+                Some(Message::with_metadata(
                     sender,
                     msg_content,
                     timestamp,

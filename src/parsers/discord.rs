@@ -3,7 +3,6 @@
 //! Handles exports from DiscordChatExporter tool.
 //! Supports multiple formats: JSON, TXT, CSV.
 
-use std::error::Error;
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::Path;
@@ -13,7 +12,8 @@ use regex::Regex;
 use serde::Deserialize;
 
 use super::ChatParser;
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 /// Parser for Discord exports (from DiscordChatExporter).
 /// Supports JSON, TXT, and CSV formats.
@@ -53,7 +53,7 @@ impl DiscordParser {
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_json(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_json(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let export: DiscordExport = serde_json::from_str(content)?;
 
         let messages = export
@@ -121,7 +121,7 @@ impl DiscordParser {
                     .and_then(|r| r.message_id.as_ref())
                     .and_then(|id_str| id_str.parse::<u64>().ok());
 
-                Some(InternalMessage::with_metadata(
+                Some(Message::with_metadata(
                     sender, content, timestamp, id, reply_to, edited,
                 ))
             })
@@ -131,13 +131,14 @@ impl DiscordParser {
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_txt(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_txt(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let mut messages = Vec::new();
 
         // Pattern: [M/D/YYYY H:MM AM] sender OR [M/D/YYYY H:MM:SS] sender
         let header_re = Regex::new(
             r"^\[(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)\]\s+(.+)$",
-        )?;
+        )
+        .map_err(|e| ChatpackError::invalid_format("Discord TXT", e.to_string()))?;
 
         let mut current_sender: Option<String> = None;
         let mut current_timestamp: Option<DateTime<Utc>> = None;
@@ -151,7 +152,7 @@ impl DiscordParser {
                 // Save previous message if exists
                 if let Some(sender) = current_sender.take() {
                     if !current_content.trim().is_empty() {
-                        messages.push(InternalMessage::with_metadata(
+                        messages.push(Message::with_metadata(
                             sender,
                             current_content.trim().to_string(),
                             current_timestamp,
@@ -217,7 +218,7 @@ impl DiscordParser {
         // Don't forget the last message
         if let Some(sender) = current_sender {
             if !current_content.trim().is_empty() {
-                messages.push(InternalMessage::with_metadata(
+                messages.push(Message::with_metadata(
                     sender,
                     current_content.trim().to_string(),
                     current_timestamp,
@@ -249,14 +250,14 @@ impl DiscordParser {
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_csv_file(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_csv_file(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
         let file = File::open(file_path)?;
         let reader = BufReader::new(file);
         self.parse_csv_reader(reader)
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_csv_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_csv_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let reader = content.as_bytes();
         self.parse_csv_reader(reader)
     }
@@ -265,7 +266,7 @@ impl DiscordParser {
     fn parse_csv_reader<R: std::io::Read>(
         &self,
         reader: R,
-    ) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    ) -> Result<Vec<Message>, ChatpackError> {
         let mut csv_reader = csv::ReaderBuilder::new()
             .has_headers(true)
             .flexible(true)
@@ -306,7 +307,7 @@ impl DiscordParser {
                 .ok()
                 .map(|dt| dt.to_utc());
 
-            messages.push(InternalMessage::with_metadata(
+            messages.push(Message::with_metadata(
                 sender, content, timestamp, None, None, None,
             ));
         }
@@ -380,7 +381,7 @@ impl ChatParser for DiscordParser {
         "Discord"
     }
 
-    fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
         // Try to detect format from extension first
         if let Some(format) = Self::detect_format_from_ext(file_path) {
             return match format {
@@ -401,7 +402,7 @@ impl ChatParser for DiscordParser {
         self.parse_str(&content)
     }
 
-    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let format = Self::detect_format_from_content(content);
 
         match format {

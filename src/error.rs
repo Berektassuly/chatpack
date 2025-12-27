@@ -20,14 +20,14 @@
 //! fn process_chat(path: &str) -> Result<()> {
 //!     let parser = create_parser(Source::Telegram);
 //!     let messages = parser.parse(path)?;
-//!     
+//!
 //!     // Handle specific errors
 //!     // match result {
 //!     //     Err(ChatpackError::Io(e)) => eprintln!("File error: {}", e),
 //!     //     Err(ChatpackError::Parse { source, .. }) => eprintln!("Parse error: {}", source),
 //!     //     _ => {}
 //!     // }
-//!     
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -43,10 +43,10 @@
 //! | [`Csv`](ChatpackError::Csv) | CSV writing fails |
 //! | [`Streaming`](ChatpackError::Streaming) | Streaming parser errors |
 
-use std::error::Error;
-use std::fmt;
 use std::io;
 use std::path::PathBuf;
+
+use thiserror::Error;
 
 /// A specialized [`Result`] type for chatpack operations.
 ///
@@ -57,9 +57,9 @@ use std::path::PathBuf;
 ///
 /// ```rust
 /// use chatpack::error::Result;
-/// use chatpack::core::InternalMessage;
+/// use chatpack::Message;
 ///
-/// fn my_function() -> Result<Vec<InternalMessage>> {
+/// fn my_function() -> Result<Vec<Message>> {
 ///     // ... operations that may fail
 ///     Ok(vec![])
 /// }
@@ -93,7 +93,7 @@ pub type Result<T> = std::result::Result<T, ChatpackError>;
 ///     _ => eprintln!("Error: {}", error),
 /// }
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ChatpackError {
     /// An I/O error occurred.
@@ -102,16 +102,19 @@ pub enum ChatpackError {
     /// - The input file doesn't exist
     /// - Permission denied
     /// - Disk is full (when writing output)
-    Io(io::Error),
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
 
     /// Failed to parse the input file.
     ///
     /// Contains the format being parsed, the underlying parse error,
     /// and optionally the file path.
+    #[error("Failed to parse {format} export{}: {source}", path.as_ref().map(|p| format!(" (file: {})", p.display())).unwrap_or_default())]
     Parse {
         /// The format being parsed (e.g., "Telegram JSON", "WhatsApp TXT")
         format: &'static str,
         /// The underlying parse error
+        #[source]
         source: ParseErrorKind,
         /// The file path, if available
         path: Option<PathBuf>,
@@ -123,6 +126,7 @@ pub enum ChatpackError {
     /// - Telegram JSON is missing the "messages" array
     /// - WhatsApp TXT doesn't match any known date format
     /// - Discord export is in an unrecognized format
+    #[error("Invalid {format} format: {message}")]
     InvalidFormat {
         /// The format that was expected
         format: &'static str,
@@ -133,6 +137,7 @@ pub enum ChatpackError {
     /// Invalid date format in filter configuration.
     ///
     /// Date filters expect YYYY-MM-DD format.
+    #[error("Invalid date '{input}'. Expected format: {expected}")]
     InvalidDate {
         /// The invalid date string that was provided
         input: String,
@@ -143,26 +148,37 @@ pub enum ChatpackError {
     /// CSV writing error.
     ///
     /// This can occur when writing output to CSV format.
-    Csv(csv::Error),
+    #[error("CSV error: {0}")]
+    Csv(#[from] csv::Error),
+
+    /// JSON parsing/serialization error.
+    ///
+    /// This can occur when parsing or writing JSON.
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
 
     /// Streaming parser error.
     ///
     /// Errors specific to streaming parsers for large files.
-    Streaming(StreamingErrorKind),
+    #[error("Streaming error: {0}")]
+    Streaming(#[source] StreamingErrorKind),
 
     /// UTF-8 encoding error.
     ///
     /// Occurs when file content is not valid UTF-8.
+    #[error("UTF-8 encoding error in {context}: {source}")]
     Utf8 {
         /// Description of where the error occurred
         context: String,
         /// The underlying UTF-8 error
+        #[source]
         source: std::string::FromUtf8Error,
     },
 
     /// Buffer overflow in streaming parser.
     ///
     /// A single message exceeded the maximum allowed size.
+    #[error("Message too large: {actual_size} bytes (maximum: {max_size} bytes)")]
     BufferOverflow {
         /// Maximum allowed size in bytes
         max_size: usize,
@@ -173,6 +189,7 @@ pub enum ChatpackError {
     /// Unexpected end of file.
     ///
     /// The file ended before parsing was complete.
+    #[error("Unexpected end of file while {context}")]
     UnexpectedEof {
         /// Context about what was being parsed
         context: String,
@@ -180,171 +197,40 @@ pub enum ChatpackError {
 }
 
 /// Kinds of parse errors that can occur.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ParseErrorKind {
     /// JSON parsing error
-    Json(serde_json::Error),
+    #[error("{0}")]
+    Json(#[from] serde_json::Error),
     /// Regex/pattern matching error
+    #[error("{0}")]
     Pattern(String),
     /// Generic parsing error
+    #[error("{0}")]
     Other(String),
 }
 
-impl fmt::Display for ParseErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseErrorKind::Json(e) => write!(f, "{}", e),
-            ParseErrorKind::Pattern(s) => write!(f, "{}", s),
-            ParseErrorKind::Other(s) => write!(f, "{}", s),
-        }
-    }
-}
-
-impl Error for ParseErrorKind {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ParseErrorKind::Json(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
 /// Kinds of streaming errors.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum StreamingErrorKind {
     /// IO error during streaming
-    Io(io::Error),
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
     /// JSON parsing error during streaming
-    Json(serde_json::Error),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
     /// Invalid format encountered
+    #[error("Invalid format: {0}")]
     InvalidFormat(String),
     /// Buffer overflow
-    BufferOverflow { max_size: usize, actual_size: usize },
+    #[error("Buffer overflow: {actual_size} bytes (max: {max_size})")]
+    BufferOverflow {
+        max_size: usize,
+        actual_size: usize,
+    },
     /// Unexpected EOF
+    #[error("Unexpected end of file")]
     UnexpectedEof,
-}
-
-impl fmt::Display for StreamingErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StreamingErrorKind::Io(e) => write!(f, "IO error: {}", e),
-            StreamingErrorKind::Json(e) => write!(f, "JSON error: {}", e),
-            StreamingErrorKind::InvalidFormat(s) => write!(f, "Invalid format: {}", s),
-            StreamingErrorKind::BufferOverflow {
-                max_size,
-                actual_size,
-            } => write!(
-                f,
-                "Buffer overflow: {} bytes (max: {})",
-                actual_size, max_size
-            ),
-            StreamingErrorKind::UnexpectedEof => write!(f, "Unexpected end of file"),
-        }
-    }
-}
-
-impl Error for StreamingErrorKind {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            StreamingErrorKind::Io(e) => Some(e),
-            StreamingErrorKind::Json(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for ChatpackError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ChatpackError::Io(e) => write!(f, "IO error: {}", e),
-
-            ChatpackError::Parse {
-                format,
-                source,
-                path,
-            } => {
-                write!(f, "Failed to parse {} export", format)?;
-                if let Some(p) = path {
-                    write!(f, " (file: {})", p.display())?;
-                }
-                write!(f, ": {}", source)
-            }
-
-            ChatpackError::InvalidFormat { format, message } => {
-                write!(f, "Invalid {} format: {}", format, message)
-            }
-
-            ChatpackError::InvalidDate { input, expected } => {
-                write!(
-                    f,
-                    "Invalid date '{}'. Expected format: {}",
-                    input, expected
-                )
-            }
-
-            ChatpackError::Csv(e) => write!(f, "CSV error: {}", e),
-
-            ChatpackError::Streaming(e) => write!(f, "Streaming error: {}", e),
-
-            ChatpackError::Utf8 { context, source } => {
-                write!(f, "UTF-8 encoding error in {}: {}", context, source)
-            }
-
-            ChatpackError::BufferOverflow {
-                max_size,
-                actual_size,
-            } => {
-                write!(
-                    f,
-                    "Message too large: {} bytes (maximum: {} bytes)",
-                    actual_size, max_size
-                )
-            }
-
-            ChatpackError::UnexpectedEof { context } => {
-                write!(f, "Unexpected end of file while {}", context)
-            }
-        }
-    }
-}
-
-impl Error for ChatpackError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ChatpackError::Io(e) => Some(e),
-            ChatpackError::Parse { source, .. } => Some(source),
-            ChatpackError::Csv(e) => Some(e),
-            ChatpackError::Streaming(e) => Some(e),
-            ChatpackError::Utf8 { source, .. } => Some(source),
-            _ => None,
-        }
-    }
-}
-
-// ============================================================================
-// From implementations for ergonomic error conversion
-// ============================================================================
-
-impl From<io::Error> for ChatpackError {
-    fn from(err: io::Error) -> Self {
-        ChatpackError::Io(err)
-    }
-}
-
-impl From<serde_json::Error> for ChatpackError {
-    fn from(err: serde_json::Error) -> Self {
-        ChatpackError::Parse {
-            format: "JSON",
-            source: ParseErrorKind::Json(err),
-            path: None,
-        }
-    }
-}
-
-impl From<csv::Error> for ChatpackError {
-    fn from(err: csv::Error) -> Self {
-        ChatpackError::Csv(err)
-    }
 }
 
 impl From<std::string::FromUtf8Error> for ChatpackError {
@@ -532,6 +418,7 @@ mod tests {
 
     #[test]
     fn test_error_source_chain() {
+        use std::error::Error;
         let io_err = io::Error::new(io::ErrorKind::PermissionDenied, "access denied");
         let err = ChatpackError::from(io_err);
         assert!(err.source().is_some());

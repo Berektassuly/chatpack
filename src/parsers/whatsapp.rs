@@ -9,14 +9,14 @@
 //! - EU2: `15/01/2024, 10:30 - Sender: Message`
 //! - RU: `15.01.2024, 10:30 - Sender: Message`
 
-use std::error::Error;
 use std::fs;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
 
 use super::ChatParser;
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 /// Parser for WhatsApp TXT exports.
 pub struct WhatsAppParser;
@@ -249,12 +249,12 @@ impl ChatParser for WhatsAppParser {
         "WhatsApp"
     }
 
-    fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
         let content = fs::read_to_string(file_path)?;
         self.parse_str(&content)
     }
 
-    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
         let lines: Vec<&str> = content.lines().collect();
 
         if lines.is_empty() {
@@ -263,16 +263,20 @@ impl ChatParser for WhatsAppParser {
 
         // Step 1: Auto-detect format from first 20 lines
         let sample_size = std::cmp::min(20, lines.len());
-        let format = detect_format(&lines[..sample_size]).ok_or(
-            "Could not detect WhatsApp export format. \
-             Make sure the file is a valid WhatsApp chat export.",
-        )?;
+        let format = detect_format(&lines[..sample_size]).ok_or_else(|| {
+            ChatpackError::invalid_format(
+                "WhatsApp",
+                "Could not detect WhatsApp export format. \
+                 Make sure the file is a valid WhatsApp chat export.",
+            )
+        })?;
 
         // Step 2: Compile regex for detected format
-        let regex = Regex::new(format.pattern())?;
+        let regex = Regex::new(format.pattern())
+            .map_err(|e| ChatpackError::invalid_format("WhatsApp", e.to_string()))?;
 
         // Step 3: Parse all lines
-        let mut messages: Vec<InternalMessage> = Vec::new();
+        let mut messages: Vec<Message> = Vec::new();
 
         for line in &lines {
             if line.trim().is_empty() {
@@ -293,7 +297,7 @@ impl ChatParser for WhatsAppParser {
 
                 let timestamp = parse_timestamp(date_str, time_str, format);
 
-                let msg = InternalMessage::with_metadata(
+                let msg = Message::with_metadata(
                     sender,
                     msg_content,
                     timestamp,

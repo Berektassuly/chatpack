@@ -22,7 +22,12 @@ pub mod output;
 pub mod processor;
 
 // Re-export main types for convenience
-pub use filter::{FilterConfig, FilterError, apply_filters};
-pub use models::{InternalMessage, OutputConfig};
+pub use filter::{FilterConfig, apply_filters};
+#[allow(deprecated)]
+pub use models::InternalMessage;
+pub use models::OutputConfig;
+
+// Re-export Message from the new location
+pub use crate::Message;
 pub use output::{write_csv, write_json, write_jsonl};
 pub use processor::{ProcessingStats, merge_consecutive};

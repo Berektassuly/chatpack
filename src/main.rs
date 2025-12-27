@@ -14,6 +14,7 @@ use chatpack::core::{
 };
 use chatpack::parsers::create_parser;
 use chatpack::streaming::create_streaming_parser;
+use chatpack::{ChatpackError, Message};
 
 fn main() {
     if let Err(e) = run() {
@@ -22,7 +23,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> Result<(), ChatpackError> {
     let total_start = Instant::now();
     let args = Args::parse();
 
@@ -161,14 +162,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// Parse using regular (in-memory) parser
 fn parse_regular(
     args: &Args,
-) -> Result<
-    (
-        Vec<chatpack::core::InternalMessage>,
-        usize,
-        std::time::Duration,
-    ),
-    Box<dyn std::error::Error>,
-> {
+) -> Result<(Vec<Message>, usize, std::time::Duration), ChatpackError> {
     let parser = create_parser(args.source);
     println!("⏳ Parsing {}...", parser.name());
     let parse_start = Instant::now();
@@ -180,16 +174,13 @@ fn parse_regular(
 /// Parse using streaming parser (memory-efficient)
 fn parse_streaming(
     args: &Args,
-) -> Result<
-    (
-        Vec<chatpack::core::InternalMessage>,
-        usize,
-        std::time::Duration,
-    ),
-    Box<dyn std::error::Error>,
-> {
-    let parser = create_streaming_parser(args.source)
-        .ok_or_else(|| format!("Streaming not supported for {}", args.source))?;
+) -> Result<(Vec<Message>, usize, std::time::Duration), ChatpackError> {
+    let parser = create_streaming_parser(args.source).ok_or_else(|| {
+        ChatpackError::InvalidFormat {
+            format: "streaming",
+            message: format!("Streaming not supported for {}", args.source),
+        }
+    })?;
 
     println!("⏳ Streaming {}...", parser.name());
     let parse_start = Instant::now();
