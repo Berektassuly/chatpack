@@ -73,5 +73,4 @@ jobs:
 
       - name: Check binary size
         run: |
-          ls -lh target/release/chatpack
-          echo "Binary size: $(du -h target/release/chatpack | cut -f1)"
+          ls -lh target/release/libchatpack.rlib

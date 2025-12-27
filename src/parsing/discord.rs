@@ -264,7 +264,7 @@ mod tests {
             id: "123".to_string(),
             timestamp: "2024-01-15T10:30:00+00:00".to_string(),
             timestamp_edited: None,
-            content: "".to_string(),
+            content: String::new(),
             author: DiscordAuthor {
                 name: "bob".to_string(),
                 nickname: None,
