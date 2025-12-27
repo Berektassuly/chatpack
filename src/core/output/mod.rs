@@ -17,11 +17,12 @@
 //!
 //! ```rust,no_run
 //! use chatpack::core::output::{write_csv, write_json, write_jsonl, to_csv};
-//! use chatpack::core::models::{InternalMessage, OutputConfig};
+//! use chatpack::core::models::OutputConfig;
+//! use chatpack::Message;
 //!
 //! let messages = vec![
-//!     InternalMessage::new("Alice", "Hello!"),
-//!     InternalMessage::new("Bob", "Hi there!"),
+//!     Message::new("Alice", "Hello!"),
+//!     Message::new("Bob", "Hi there!"),
 //! ];
 //!
 //! let config = OutputConfig::new().with_timestamps();

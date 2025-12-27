@@ -6,14 +6,14 @@
 //! The main quirk is that Meta exports UTF-8 text encoded as ISO-8859-1,
 //! causing Cyrillic and other non-ASCII text to appear as garbage (Mojibake).
 
-use std::error::Error;
 use std::fs;
 
 use chrono::{TimeZone, Utc};
 use serde::Deserialize;
 
 use super::ChatParser;
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 #[derive(Debug, Deserialize)]
 struct InstagramExport {
@@ -61,16 +61,15 @@ impl ChatParser for InstagramParser {
         "Instagram"
     }
 
-    fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
         let content = fs::read_to_string(file_path)?;
         self.parse_str(&content)
     }
 
-    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>> {
-        let export: InstagramExport = serde_json::from_str(content)
-            .map_err(|e| format!("Failed to parse Instagram JSON: {e}"))?;
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
+        let export: InstagramExport = serde_json::from_str(content)?;
 
-        let mut messages: Vec<InternalMessage> = export
+        let mut messages: Vec<Message> = export
             .messages
             .into_iter()
             .filter_map(|msg| {
@@ -82,7 +81,7 @@ impl ChatParser for InstagramParser {
 
                 let timestamp = Utc.timestamp_millis_opt(msg.timestamp_ms).single()?;
 
-                Some(InternalMessage {
+                Some(Message {
                     id: None,
                     timestamp: Some(timestamp),
                     sender: fix_encoding(&msg.sender_name),

@@ -14,7 +14,6 @@
 //!
 //! This parser streams the messages array without loading the entire file.
 
-use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek};
 use std::path::Path;
@@ -23,7 +22,8 @@ use chrono::DateTime;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
 
@@ -75,7 +75,7 @@ impl StreamingParser for TelegramStreamingParser {
         "Telegram (Streaming)"
     }
 
-    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, Box<dyn Error>> {
+    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, ChatpackError> {
         let path = Path::new(file_path);
         let file = File::open(path)?;
         let file_size = file.metadata()?.len();
@@ -211,8 +211,8 @@ impl<R: BufRead + Seek> TelegramMessageIterator<R> {
         }
     }
 
-    /// Parses a JSON string into an InternalMessage.
-    fn parse_message(json_str: &str) -> StreamingResult<Option<InternalMessage>> {
+    /// Parses a JSON string into a Message.
+    fn parse_message(json_str: &str) -> StreamingResult<Option<Message>> {
         let msg: TelegramRawMessage = serde_json::from_str(json_str)?;
 
         // Skip non-message types
@@ -246,7 +246,7 @@ impl<R: BufRead + Seek> TelegramMessageIterator<R> {
                 .and_then(|ts| DateTime::from_timestamp(ts, 0))
         });
 
-        Ok(Some(InternalMessage::with_metadata(
+        Ok(Some(Message::with_metadata(
             sender,
             content,
             timestamp,
@@ -275,7 +275,7 @@ impl<R: BufRead + Seek + Send> MessageIterator for TelegramMessageIterator<R> {
 }
 
 impl<R: BufRead + Seek + Send> Iterator for TelegramMessageIterator<R> {
-    type Item = StreamingResult<InternalMessage>;
+    type Item = StreamingResult<Message>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {

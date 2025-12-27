@@ -31,8 +31,8 @@ pub use telegram::TelegramParser;
 pub use whatsapp::WhatsAppParser;
 
 use crate::cli::Source;
-use crate::core::InternalMessage;
-use std::error::Error;
+use crate::error::ChatpackError;
+use crate::Message;
 
 /// Trait for parsing chat exports from different platforms.
 ///
@@ -41,7 +41,7 @@ pub trait ChatParser: Send + Sync {
     /// Returns the name of the parser (e.g., "Telegram", "WhatsApp").
     fn name(&self) -> &'static str;
 
-    /// Parses a chat export file and returns a vector of internal messages.
+    /// Parses a chat export file and returns a vector of messages.
     ///
     /// # Arguments
     ///
@@ -49,8 +49,8 @@ pub trait ChatParser: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Returns an error if the file cannot be read or parsed.
-    fn parse(&self, file_path: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>>;
+    /// Returns a [`ChatpackError`] if the file cannot be read or parsed.
+    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError>;
 
     /// Parses chat content from a string.
     ///
@@ -63,8 +63,8 @@ pub trait ChatParser: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Returns an error if the content cannot be parsed.
-    fn parse_str(&self, content: &str) -> Result<Vec<InternalMessage>, Box<dyn Error>>;
+    /// Returns a [`ChatpackError`] if the content cannot be parsed.
+    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError>;
 }
 
 /// Creates a parser for the specified source.

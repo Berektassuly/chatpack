@@ -13,7 +13,7 @@
 //!
 //! ```rust,no_run
 //! use chatpack::streaming::{StreamingParser, TelegramStreamingParser};
-//! use chatpack::core::InternalMessage;
+//! use chatpack::Message;
 //!
 //! let parser = TelegramStreamingParser::new();
 //!
@@ -26,7 +26,7 @@
 //! }
 //!
 //! // Or collect with error handling
-//! let messages: Vec<InternalMessage> = parser
+//! let messages: Vec<Message> = parser
 //!     .stream("large_export.json")
 //!     .unwrap()
 //!     .filter_map(Result::ok)

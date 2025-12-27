@@ -2,7 +2,6 @@
 //!
 //! Supports JSONL format which is naturally streamable.
 
-use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek};
 use std::path::Path;
@@ -10,7 +9,8 @@ use std::path::Path;
 use chrono::DateTime;
 use serde::Deserialize;
 
-use crate::core::InternalMessage;
+use crate::error::ChatpackError;
+use crate::Message;
 
 use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
 
@@ -57,7 +57,7 @@ impl StreamingParser for DiscordStreamingParser {
         "Discord (Streaming)"
     }
 
-    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, Box<dyn Error>> {
+    fn stream(&self, file_path: &str) -> Result<Box<dyn MessageIterator>, ChatpackError> {
         let path = Path::new(file_path);
         let file = File::open(path)?;
         let file_size = file.metadata()?.len();
@@ -100,7 +100,7 @@ impl<R: BufRead> DiscordJsonlIterator<R> {
         }
     }
 
-    fn parse_line(line: &str) -> StreamingResult<Option<InternalMessage>> {
+    fn parse_line(line: &str) -> StreamingResult<Option<Message>> {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             return Ok(None);
@@ -126,7 +126,7 @@ impl<R: BufRead> DiscordJsonlIterator<R> {
 
         let id = msg.id.parse::<u64>().ok();
 
-        Ok(Some(InternalMessage::with_metadata(
+        Ok(Some(Message::with_metadata(
             sender,
             msg.content,
             timestamp,
@@ -155,7 +155,7 @@ impl<R: BufRead + Send> MessageIterator for DiscordJsonlIterator<R> {
 }
 
 impl<R: BufRead + Send> Iterator for DiscordJsonlIterator<R> {
-    type Item = StreamingResult<InternalMessage>;
+    type Item = StreamingResult<Message>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -282,7 +282,7 @@ impl<R: BufRead + Seek> DiscordJsonIterator<R> {
         }
     }
 
-    fn parse_message(json_str: &str) -> StreamingResult<Option<InternalMessage>> {
+    fn parse_message(json_str: &str) -> StreamingResult<Option<Message>> {
         let msg: DiscordRawMessage = serde_json::from_str(json_str)?;
 
         let content = msg.content;
@@ -311,7 +311,7 @@ impl<R: BufRead + Seek> DiscordJsonIterator<R> {
             .and_then(|r| r.message_id)
             .and_then(|id| id.parse::<u64>().ok());
 
-        Ok(Some(InternalMessage::with_metadata(
+        Ok(Some(Message::with_metadata(
             sender, content, timestamp, id, reply_to, edited,
         )))
     }
@@ -335,7 +335,7 @@ impl<R: BufRead + Seek + Send> MessageIterator for DiscordJsonIterator<R> {
 }
 
 impl<R: BufRead + Seek + Send> Iterator for DiscordJsonIterator<R> {
-    type Item = StreamingResult<InternalMessage>;
+    type Item = StreamingResult<Message>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {

@@ -20,7 +20,7 @@
 //! ```rust,no_run
 //! use chatpack::prelude::*;
 //!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! fn main() -> Result<()> {
 //!     // Parse a Telegram export
 //!     let parser = create_parser(Source::Telegram);
 //!     let messages = parser.parse("telegram_export.json")?;
@@ -56,7 +56,7 @@
 //! ## Module Structure
 //!
 //! - [`core`] — Core types and functionality
-//!   - [`core::models`] — [`InternalMessage`], [`OutputConfig`]
+//!   - [`core::models`] — [`InternalMessage`] (deprecated, use [`Message`]), [`OutputConfig`]
 //!   - [`core::filter`] — [`FilterConfig`], [`apply_filters`]
 //!   - [`core::processor`] — [`merge_consecutive`], [`ProcessingStats`]
 //!   - [`core::output`] — [`write_json`], [`write_jsonl`], [`write_csv`]
@@ -66,12 +66,19 @@
 //! - [`streaming`] — Streaming parsers for large files
 //!   - [`TelegramStreamingParser`], [`DiscordStreamingParser`]
 //! - [`cli`] — CLI types ([`Source`], [`OutputFormat`])
+//! - [`error`] — Unified error types ([`ChatpackError`], [`Result`])
 //! - [`prelude`] — Convenient re-exports
 
 pub mod cli;
 pub mod core;
+pub mod error;
+pub mod message;
 pub mod parsers;
 pub mod streaming;
+
+// Re-export the main types at the crate root for convenience
+pub use error::{ChatpackError, Result};
+pub use message::Message;
 
 /// Convenient re-exports for common usage.
 ///
@@ -81,11 +88,17 @@ pub mod streaming;
 /// use chatpack::prelude::*;
 /// ```
 pub mod prelude {
-    // Models
+    // Core message type
+    pub use crate::Message;
+
+    // Error types
+    pub use crate::error::{ChatpackError, Result};
+
+    // Models (with backward-compatible alias)
     pub use crate::core::models::{InternalMessage, OutputConfig};
 
     // Filtering
-    pub use crate::core::filter::{FilterConfig, FilterError, apply_filters};
+    pub use crate::core::filter::{FilterConfig, apply_filters};
 
     // Processing
     pub use crate::core::processor::{ProcessingStats, merge_consecutive};
