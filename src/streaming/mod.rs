@@ -6,8 +6,8 @@
 //! # Architecture
 //!
 //! The streaming API is built around two core traits:
-//! - [`StreamingParser`] — produces an iterator of messages
-//! - [`MessageIterator`] — the actual iterator implementation
+//! - [`StreamingParser`] - produces an iterator of messages
+//! - [`MessageIterator`] - the actual iterator implementation
 //!
 //! # Example
 //!
