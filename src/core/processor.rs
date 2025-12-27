@@ -4,7 +4,7 @@
 //! - [`merge_consecutive`] - Merge consecutive messages from same sender
 //! - [`ProcessingStats`] - Statistics about processing results
 
-use super::models::InternalMessage;
+use crate::Message;
 
 /// Merges consecutive messages from the same sender into single entries.
 ///
@@ -25,12 +25,12 @@ use super::models::InternalMessage;
 ///
 /// ```rust
 /// use chatpack::core::processor::merge_consecutive;
-/// use chatpack::core::models::InternalMessage;
+/// use chatpack::Message;
 ///
 /// let messages = vec![
-///     InternalMessage::new("Alice", "Hi"),
-///     InternalMessage::new("Alice", "How are you?"),
-///     InternalMessage::new("Bob", "Good!"),
+///     Message::new("Alice", "Hi"),
+///     Message::new("Alice", "How are you?"),
+///     Message::new("Bob", "Good!"),
 /// ];
 ///
 /// let merged = merge_consecutive(messages);
@@ -46,8 +46,8 @@ use super::models::InternalMessage;
 /// - Consumes the input vector (no cloning of messages)
 /// - Allocates a new output vector
 /// - O(n) time complexity
-pub fn merge_consecutive(messages: Vec<InternalMessage>) -> Vec<InternalMessage> {
-    let mut merged: Vec<InternalMessage> = Vec::with_capacity(messages.len());
+pub fn merge_consecutive(messages: Vec<Message>) -> Vec<Message> {
+    let mut merged: Vec<Message> = Vec::with_capacity(messages.len());
 
     for msg in messages {
         match merged.last_mut() {
@@ -170,11 +170,11 @@ mod tests {
     #[test]
     fn test_merge_consecutive() {
         let messages = vec![
-            InternalMessage::new("Alice", "Hi"),
-            InternalMessage::new("Alice", "How are you?"),
-            InternalMessage::new("Bob", "Fine"),
-            InternalMessage::new("Bob", "Thanks"),
-            InternalMessage::new("Alice", "Great!"),
+            Message::new("Alice", "Hi"),
+            Message::new("Alice", "How are you?"),
+            Message::new("Bob", "Fine"),
+            Message::new("Bob", "Thanks"),
+            Message::new("Alice", "Great!"),
         ];
 
         let merged = merge_consecutive(messages);
@@ -190,14 +190,14 @@ mod tests {
 
     #[test]
     fn test_merge_empty() {
-        let messages: Vec<InternalMessage> = vec![];
+        let messages: Vec<Message> = vec![];
         let merged = merge_consecutive(messages);
         assert!(merged.is_empty());
     }
 
     #[test]
     fn test_merge_single() {
-        let messages = vec![InternalMessage::new("Alice", "Hi")];
+        let messages = vec![Message::new("Alice", "Hi")];
         let merged = merge_consecutive(messages);
         assert_eq!(merged.len(), 1);
     }
@@ -208,10 +208,8 @@ mod tests {
 
         let ts = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
         let messages = vec![
-            InternalMessage::new("Alice", "First")
-                .with_timestamp(ts)
-                .with_id(1),
-            InternalMessage::new("Alice", "Second").with_id(2),
+            Message::new("Alice", "First").with_timestamp(ts).with_id(1),
+            Message::new("Alice", "Second").with_id(2),
         ];
 
         let merged = merge_consecutive(messages);

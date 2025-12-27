@@ -1,26 +1,26 @@
 //! Tests for output writers (JSON, JSONL, CSV)
 
 use chatpack::core::output::{write_csv, write_json, write_jsonl};
-use chatpack::core::{InternalMessage, OutputConfig};
+use chatpack::core::{Message, OutputConfig};
 use chrono::{TimeZone, Utc};
 use std::fs;
 use tempfile::tempdir;
 
-fn sample_messages() -> Vec<InternalMessage> {
+fn sample_messages() -> Vec<Message> {
     let ts1 = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
     let ts2 = Utc.with_ymd_and_hms(2024, 1, 15, 10, 31, 0).unwrap();
     let ts3 = Utc.with_ymd_and_hms(2024, 1, 15, 10, 32, 0).unwrap();
     let edit_ts = Utc.with_ymd_and_hms(2024, 1, 15, 11, 0, 0).unwrap();
 
     vec![
-        InternalMessage::new("Alice", "Hello!")
+        Message::new("Alice", "Hello!")
             .with_id(1)
             .with_timestamp(ts1),
-        InternalMessage::new("Bob", "Hi Alice!")
+        Message::new("Bob", "Hi Alice!")
             .with_id(2)
             .with_timestamp(ts2)
             .with_reply_to(1),
-        InternalMessage::new("Alice", "How are you?")
+        Message::new("Alice", "How are you?")
             .with_id(3)
             .with_timestamp(ts3)
             .with_edited(edit_ts),
@@ -97,7 +97,7 @@ mod json_writer_tests {
         let path = dir.path().join("output.json");
         let path_str = path.to_str().unwrap();
 
-        let messages: Vec<InternalMessage> = vec![];
+        let messages: Vec<Message> = vec![];
         let config = OutputConfig::new();
 
         write_json(&messages, path_str, &config).unwrap();
@@ -113,8 +113,8 @@ mod json_writer_tests {
         let path_str = path.to_str().unwrap();
 
         let messages = vec![
-            InternalMessage::new("Алиса", "Привет! 🎉"),
-            InternalMessage::new("田中", "こんにちは"),
+            Message::new("Алиса", "Привет! 🎉"),
+            Message::new("田中", "こんにちは"),
         ];
         let config = OutputConfig::new();
 
@@ -195,7 +195,7 @@ mod jsonl_writer_tests {
         let path = dir.path().join("output.jsonl");
         let path_str = path.to_str().unwrap();
 
-        let messages: Vec<InternalMessage> = vec![];
+        let messages: Vec<Message> = vec![];
         let config = OutputConfig::new();
 
         write_jsonl(&messages, path_str, &config).unwrap();
@@ -218,7 +218,7 @@ mod csv_writer_tests {
         let path = dir.path().join("output.csv");
         let path_str = path.to_str().unwrap();
 
-        let messages = vec![InternalMessage::new("Alice", "Hello, World!")];
+        let messages = vec![Message::new("Alice", "Hello, World!")];
         let config = OutputConfig::new();
 
         write_csv(&messages, path_str, &config).unwrap();
@@ -233,7 +233,7 @@ mod csv_writer_tests {
         let path = dir.path().join("output.csv");
         let path_str = path.to_str().unwrap();
 
-        let messages = vec![InternalMessage::new("Alice", "She said \"hello\"")];
+        let messages = vec![Message::new("Alice", "She said \"hello\"")];
         let config = OutputConfig::new();
 
         write_csv(&messages, path_str, &config).unwrap();
@@ -248,7 +248,7 @@ mod csv_writer_tests {
         let path = dir.path().join("output.csv");
         let path_str = path.to_str().unwrap();
 
-        let messages: Vec<InternalMessage> = vec![];
+        let messages: Vec<Message> = vec![];
         let config = OutputConfig::new();
 
         write_csv(&messages, path_str, &config).unwrap();
@@ -265,7 +265,7 @@ mod csv_writer_tests {
         let path = dir.path().join("output.csv");
         let path_str = path.to_str().unwrap();
 
-        let messages = vec![InternalMessage::new("Алиса", "Привет! 🎉")];
+        let messages = vec![Message::new("Алиса", "Привет! 🎉")];
         let config = OutputConfig::new();
 
         write_csv(&messages, path_str, &config).unwrap();
@@ -281,7 +281,7 @@ mod csv_writer_tests {
         let path = dir.path().join("output.csv");
         let path_str = path.to_str().unwrap();
 
-        let messages = vec![InternalMessage::new("Alice", "Line 1\nLine 2\nLine 3")];
+        let messages = vec![Message::new("Alice", "Line 1\nLine 2\nLine 3")];
         let config = OutputConfig::new();
 
         write_csv(&messages, path_str, &config).unwrap();
@@ -302,9 +302,9 @@ mod edge_cases {
         let dir = tempdir().unwrap();
 
         let messages = vec![
-            InternalMessage::new("Alice", "Test <>&\"'"),
-            InternalMessage::new("Bob", "Tab:\tNewline:\n"),
-            InternalMessage::new("Charlie", "Backslash: \\"),
+            Message::new("Alice", "Test <>&\"'"),
+            Message::new("Bob", "Tab:\tNewline:\n"),
+            Message::new("Charlie", "Backslash: \\"),
         ];
 
         let config = OutputConfig::new();
@@ -328,7 +328,7 @@ mod edge_cases {
         let dir = tempdir().unwrap();
 
         let long_content = "A".repeat(10000);
-        let messages = vec![InternalMessage::new("Alice", &long_content)];
+        let messages = vec![Message::new("Alice", &long_content)];
 
         let config = OutputConfig::new();
 
@@ -343,7 +343,7 @@ mod edge_cases {
     fn test_empty_sender() {
         let dir = tempdir().unwrap();
 
-        let messages = vec![InternalMessage::new("", "Message with empty sender")];
+        let messages = vec![Message::new("", "Message with empty sender")];
 
         let config = OutputConfig::new();
 

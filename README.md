@@ -13,8 +13,6 @@
 [![Downloads](https://img.shields.io/crates/d/chatpack.svg)](https://crates.io/crates/chatpack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Platforms:** Windows • macOS • Linux
-
 ## The Problem
 
 You want to ask Claude/ChatGPT about your conversations, but:
@@ -27,7 +25,7 @@ You want to ask Claude/ChatGPT about your conversations, but:
 ```
 ┌─────────────────┐     ┌──────────┐     ┌─────────────────┐
 │ Telegram JSON   │     │          │     │ Clean CSV       │
-│ WhatsApp TXT    │ ──▶│ chatpack │ ──▶ │ Ready for LLM   │
+│ WhatsApp TXT    │ ──▶ │ chatpack │ ──▶ │ Ready for LLM   │
 │ Instagram JSON  │     │          │     │ 13x less tokens │
 │ Discord Export  │     │          │     │                 │
 └─────────────────┘     └──────────┘     └─────────────────┘
@@ -43,26 +41,6 @@ You want to ask Claude/ChatGPT about your conversations, but:
 
 > 💡 **Use CSV for maximum token savings.** JSONL is good for RAG pipelines. JSON keeps full structure but wastes tokens.
 
-## Use Cases
-
-### 💬 Chat with your chat history
-```bash
-chatpack tg telegram_export.json -o context.txt
-# Paste into ChatGPT: "Based on this conversation, what did we decide about...?"
-```
-
-### 🔍 Build RAG pipeline
-```bash
-chatpack tg chat.json -f jsonl -t -o dataset.jsonl
-# Each line = one document with timestamp for vector DB
-```
-
-### 📊 Analyze conversations
-```bash
-chatpack wa chat.txt --from "Alice" --after 2024-01-01 -f json
-# Filter and export specific messages
-```
-
 ## Features
 
 - 🚀 **Fast** — 1.6M+ messages/sec (full pipeline)
@@ -70,99 +48,88 @@ chatpack wa chat.txt --from "Alice" --after 2024-01-01 -f json
 - 🔀 **Smart merge** — Consecutive messages from same sender → one entry
 - 🎯 **Filters** — By date, by sender
 - 📄 **Formats** — CSV (13x compression), JSON, JSONL (for RAG)
-- 📚 **Library** — Use as Rust crate in your projects
+- 📡 **Streaming** — O(1) memory for large files
+- ⚡ **Async** — Tokio-based async parsers (optional)
 
 ## Installation
 
-### Pre-built binaries
-
-| Platform | Download |
-|----------|----------|
-| Windows | [chatpack-windows-x64.exe](https://github.com/berektassuly/chatpack/releases/latest/download/chatpack-windows-x64.exe) |
-| macOS (Intel) | [chatpack-macos-x64](https://github.com/berektassuly/chatpack/releases/latest/download/chatpack-macos-x64) |
-| macOS (Apple Silicon) | [chatpack-macos-arm64](https://github.com/berektassuly/chatpack/releases/latest/download/chatpack-macos-arm64) |
-| Linux | [chatpack-linux-x64](https://github.com/berektassuly/chatpack/releases/latest/download/chatpack-linux-x64) |
-
-### Via Cargo
-
-```bash
-cargo install chatpack
-```
-
-### As a library
+Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-chatpack = "0.2"
+chatpack = "0.5"
 ```
 
-## Quick Start (CLI)
+### Feature Flags
 
-```bash
-# Telegram
-chatpack tg result.json
+| Feature | Description | Default |
+|---------|-------------|---------|
+| `full` | All parsers + all output formats | ✅ |
+| `telegram` | Telegram JSON parser | ✅ |
+| `whatsapp` | WhatsApp TXT parser | ✅ |
+| `instagram` | Instagram JSON parser | ✅ |
+| `discord` | Discord JSON/TXT/CSV parser | ✅ |
+| `csv-output` | CSV output format | ✅ |
+| `json-output` | JSON/JSONL output formats | ✅ |
+| `streaming` | Streaming parsers for large files | ✅ |
+| `async` | Async/await support with tokio | ❌ |
 
-# WhatsApp  
-chatpack wa chat.txt
+Enable only what you need:
 
-# Instagram
-chatpack ig message_1.json
+```toml
+# Minimal: just Telegram parser with CSV output
+chatpack = { version = "0.5", default-features = false, features = ["telegram", "csv-output"] }
 
-# Discord
-chatpack dc chat.json
+# With async support
+chatpack = { version = "0.5", features = ["async"] }
 ```
 
-**Output:** `optimized_chat.csv` — ready to paste into ChatGPT/Claude.
-
-## Library Usage
+## Quick Start
 
 ### Basic example
 
 ```rust
 use chatpack::prelude::*;
+use chatpack::parser::{Platform, create_parser};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse a Telegram export
-    let parser = create_parser(Source::Telegram);
-    let messages = parser.parse("telegram_export.json")?;
+    let parser = create_parser(Platform::Telegram);
+    let messages = parser.parse("telegram_export.json".as_ref())?;
 
     // Merge consecutive messages from the same sender
     let merged = merge_consecutive(messages);
 
-    // Write to JSON
-    write_json(&merged, "output.json", &OutputConfig::new())?;
+    // Write to CSV (13x compression)
+    write_csv(&merged, "output.csv", &OutputConfig::new())?;
 
+    println!("Processed {} messages", merged.len());
     Ok(())
 }
-```
-
-### Auto-detect format
-
-```rust
-use chatpack::parsers::parse_auto;
-
-// Automatically detects Telegram, WhatsApp, or Instagram
-let messages = parse_auto("unknown_chat.json")?;
 ```
 
 ### Filter messages
 
 ```rust
 use chatpack::prelude::*;
+use chatpack::parser::{Platform, create_parser};
 
-let parser = create_parser(Source::Telegram);
-let messages = parser.parse("chat.json")?;
+fn main() -> Result<()> {
+    let parser = create_parser(Platform::Telegram);
+    let messages = parser.parse("chat.json".as_ref())?;
 
-// Filter by sender
-let config = FilterConfig::new()
-    .with_user("Alice".to_string());
-let alice_only = apply_filters(messages.clone(), &config);
+    // Filter by sender
+    let config = FilterConfig::new().with_user("Alice".to_string());
+    let alice_only = apply_filters(messages.clone(), &config);
 
-// Filter by date range
-let config = FilterConfig::new()
-    .after_date("2024-01-01")?
-    .before_date("2024-06-01")?;
-let filtered = apply_filters(messages, &config);
+    // Filter by date range
+    let config = FilterConfig::new()
+        .after_date("2024-01-01")?
+        .before_date("2024-06-01")?;
+    let filtered = apply_filters(messages, &config);
+
+    Ok(())
+}
 ```
 
 ### Output formats
@@ -170,26 +137,74 @@ let filtered = apply_filters(messages, &config);
 ```rust
 use chatpack::prelude::*;
 
-let messages = vec![
-    InternalMessage::new("Alice", "Hello!"),
-    InternalMessage::new("Bob", "Hi there!"),
-];
+fn main() -> Result<()> {
+    let messages = vec![
+        Message::new("Alice", "Hello!"),
+        Message::new("Bob", "Hi there!"),
+    ];
 
-// Minimal output (sender + content only)
-let config = OutputConfig::new();
+    // Minimal output (sender + content only)
+    let config = OutputConfig::new();
 
-// Full metadata (timestamps, IDs, replies, edits)
-let config = OutputConfig::all();
+    // Full metadata (timestamps, IDs, replies, edits)
+    let config = OutputConfig::all();
 
-// Custom selection
-let config = OutputConfig::new()
-    .with_timestamps()
-    .with_ids();
+    // Custom selection
+    let config = OutputConfig::new()
+        .with_timestamps()
+        .with_ids();
 
-// Write to different formats
-write_json(&messages, "output.json", &config)?;
-write_jsonl(&messages, "output.jsonl", &config)?;
-write_csv(&messages, "output.csv", &config)?;
+    // Write to different formats
+    write_json(&messages, "output.json", &config)?;
+    write_jsonl(&messages, "output.jsonl", &config)?;
+    write_csv(&messages, "output.csv", &config)?;
+
+    Ok(())
+}
+```
+
+### Streaming large files
+
+For files that don't fit in memory, use streaming parsers:
+
+```rust
+use chatpack::streaming::{StreamingParser, TelegramStreamingParser, StreamingConfig};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = StreamingConfig::new()
+        .with_buffer_size(128 * 1024)  // 128KB buffer
+        .with_skip_invalid(true);
+
+    let parser = TelegramStreamingParser::with_config(config);
+
+    // Process messages one at a time - O(1) memory!
+    for result in parser.stream("huge_export.json")? {
+        match result {
+            Ok(msg) => println!("{}: {}", msg.sender, msg.content),
+            Err(e) => eprintln!("Error: {}", e),
+        }
+    }
+
+    Ok(())
+}
+```
+
+### Async parsing (requires `async` feature)
+
+```rust
+use chatpack::async_parser::{AsyncParser, AsyncTelegramParser};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let parser = AsyncTelegramParser::new();
+    let messages = parser.parse("telegram_export.json").await?;
+
+    for msg in messages {
+        println!("{}: {}", msg.sender, msg.content);
+    }
+
+    Ok(())
+}
 ```
 
 ### Processing statistics
@@ -197,50 +212,52 @@ write_csv(&messages, "output.csv", &config)?;
 ```rust
 use chatpack::prelude::*;
 
-let original_count = messages.len();
-let merged = merge_consecutive(messages);
+fn main() {
+    let messages = vec![
+        Message::new("Alice", "Hi"),
+        Message::new("Alice", "How are you?"),
+        Message::new("Bob", "Good!"),
+    ];
 
-let stats = ProcessingStats::new(original_count, merged.len());
-println!("Compression: {:.1}%", stats.compression_ratio());
-println!("Messages saved: {}", stats.messages_saved());
+    let original_count = messages.len();
+    let merged = merge_consecutive(messages);
+
+    let stats = ProcessingStats::new(original_count, merged.len());
+    println!("Compression: {:.1}%", stats.compression_ratio());
+    println!("Messages saved: {}", stats.messages_saved());
+}
 ```
+
+## API Overview
+
+### Core Types
+
+| Type | Description |
+|------|-------------|
+| `Message` | Universal message representation with optional metadata |
+| `OutputConfig` | Controls which fields are included in output |
+| `FilterConfig` | Filters by date range and/or sender |
+| `ProcessingStats` | Statistics about compression and merging |
+
+### Parsers
+
+| Parser | Platform | Format |
+|--------|----------|--------|
+| `TelegramParser` | Telegram | JSON export |
+| `WhatsAppParser` | WhatsApp | TXT export (auto-detects locale) |
+| `InstagramParser` | Instagram | JSON (with Mojibake fix) |
+| `DiscordParser` | Discord | JSON/TXT/CSV via DiscordChatExporter |
+
+### Streaming Parsers
+
+| Parser | Memory | Use Case |
+|--------|--------|----------|
+| `TelegramStreamingParser` | O(1) | Files > 1GB |
+| `InstagramStreamingParser` | O(1) | Files > 1GB |
+| `DiscordStreamingParser` | O(1) | Files > 1GB |
+| `WhatsAppStreamingParser` | O(1) | Files > 1GB |
 
 📚 **Full API documentation:** [docs.rs/chatpack](https://docs.rs/chatpack)
-
-## CLI Reference
-
-```bash
-# Output formats
-chatpack tg chat.json -f csv      # 13x compression (default)
-chatpack tg chat.json -f json     # Structured array
-chatpack tg chat.json -f jsonl    # One JSON per line (for RAG)
-
-# Filters  
-chatpack tg chat.json --after 2024-01-01
-chatpack tg chat.json --before 2024-06-01
-chatpack tg chat.json --from "Alice"
-
-# Metadata
-chatpack tg chat.json -t          # Add timestamps
-chatpack tg chat.json -r          # Add reply references
-chatpack tg chat.json -e          # Add edit timestamps
-chatpack tg chat.json --ids       # Add message IDs
-chatpack tg chat.json -t -r -e --ids  # All metadata
-
-# Other options
-chatpack tg chat.json --no-merge  # Don't merge consecutive messages
-chatpack tg chat.json -o out.csv  # Custom output path
-```
-
-## Documentation
-
-| Guide | Description |
-|-------|-------------|
-| 📤 [Export Guide](docs/EXPORT_GUIDE.md) | How to export from Telegram, WhatsApp, Instagram, Discord |
-| 📖 [Usage Guide](docs/USAGE.md) | All commands, flags, filters, formats |
-| 📊 [Benchmarks](docs/BENCHMARKS.md) | Performance stats and compression metrics |
-| 🧪 [Stress Testing](docs/STRESS_TEST.md) | Generate toxic data and run stress tests |
-| 📚 [API Docs](https://docs.rs/chatpack) | Full library documentation |
 
 ## Supported Platforms
 
@@ -261,9 +278,17 @@ chatpack tg chat.json -o out.csv  # Custom output path
 | Parsing (Discord) | 1.5-1.8 M messages/sec |
 | Operations (merge/filter) | 11-14 M messages/sec |
 | CSV compression | 13x (92% token reduction) |
-| Tested file size | 500MB+ |
+| Streaming memory | ~50MB for 10GB file |
 
 > Run `cargo bench --bench parsing` to reproduce benchmarks.
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| 📤 [Export Guide](docs/EXPORT_GUIDE.md) | How to export from Telegram, WhatsApp, Instagram, Discord |
+| 📊 [Benchmarks](docs/BENCHMARKS.md) | Performance stats and compression metrics |
+| 📚 [API Docs](https://docs.rs/chatpack) | Full library documentation |
 
 ## License
 

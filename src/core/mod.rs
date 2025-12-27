@@ -12,7 +12,7 @@
 //! # #[cfg(all(feature = "csv-output", feature = "json-output"))]
 //! # fn example() {
 //! use chatpack::core::{
-//!     InternalMessage, OutputConfig, FilterConfig,
+//!     Message, OutputConfig, FilterConfig,
 //!     merge_consecutive, apply_filters,
 //!     write_csv, write_json, write_jsonl,
 //! };
@@ -26,11 +26,9 @@ pub mod processor;
 
 // Re-export main types for convenience
 pub use filter::{FilterConfig, apply_filters};
-#[allow(deprecated)]
-pub use models::InternalMessage;
 pub use models::OutputConfig;
 
-// Re-export Message from the new location
+// Re-export Message from the crate root
 pub use crate::Message;
 
 // Conditionally re-export output writers
