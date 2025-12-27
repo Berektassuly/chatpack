@@ -1,4 +1,4 @@
-# 📤 Export Guide
+# Export Guide
 
 How to export your chat history from different messengers.
 
@@ -10,9 +10,9 @@ How to export your chat history from different messengers.
 2. Go to **Settings** → **Advanced** → **Export Telegram data**
 3. Select the chat you want to export
 4. Configure export settings:
-   - ✅ **Format: JSON** (required!)
-   - ❌ Uncheck: Photos, Videos, Voice messages, Stickers
-   - ✅ Check: Text messages only
+   - **Format: JSON** (required!)
+   - Uncheck: Photos, Videos, Voice messages, Stickers
+   - Check: Text messages only
 5. Choose export location
 6. Click **Export** and wait
 7. Find `result.json` in the export folder
@@ -25,13 +25,13 @@ chatpack tg result.json
 
 | Field | Included |
 |-------|----------|
-| Message text | ✅ |
-| Sender name | ✅ |
-| Timestamp | ✅ |
-| Reply reference | ✅ |
-| Edit timestamp | ✅ |
-| Message ID | ✅ |
-| Photos/Videos | ❌ (text only) |
+| Message text | Yes |
+| Sender name | Yes |
+| Timestamp | Yes |
+| Reply reference | Yes |
+| Edit timestamp | Yes |
+| Message ID | Yes |
+| Photos/Videos | No (text only) |
 
 ---
 
@@ -82,10 +82,10 @@ chatpack auto-detects your locale:
 3. **Settings** → **Your activity** → **Download your information**
 4. Click **Request a download**
 5. Select **Some of your information**
-6. Check only **Messages** ✅
+6. Check only **Messages**
 7. Choose:
-   - **Format:** JSON
-   - **Date range:** All time
+   - **Format: JSON**
+   - **Date range: All time**
 8. Click **Submit request**
 
 ### Step 2: Wait for email
@@ -103,9 +103,9 @@ Instagram will email you when ready (can take hours or even days).
 chatpack ig message_1.json
 ```
 
-### ⚠️ Mojibake fix
+### Mojibake fix
 
-Instagram exports have broken encoding (UTF-8 stored as ISO-8859-1). 
+Instagram exports have broken encoding (UTF-8 stored as ISO-8859-1).
 
 **Before chatpack:**
 ```
@@ -123,7 +123,7 @@ chatpack fixes this automatically!
 
 ## Discord
 
-Discord doesn't have built-in export. Use **DiscordChatExporter** — a free, open-source tool.
+Discord doesn't have built-in export. Use **DiscordChatExporter** - a free, open-source tool.
 
 ### Step 1: Get DiscordChatExporter
 
@@ -135,7 +135,7 @@ Discord doesn't have built-in export. Use **DiscordChatExporter** — a free, op
 
 ### Step 2: Get your Discord token
 
-1. Open Discord in browser (not desktop app)
+1. Open Discord in **browser** (not desktop app)
 2. Press `F12` to open Developer Tools
 3. Go to **Network** tab
 4. Send any message or refresh
@@ -147,12 +147,14 @@ Discord doesn't have built-in export. Use **DiscordChatExporter** — a free, op
 ### Step 3: Export chat
 
 **GUI (Windows):**
+
 1. Paste your token
 2. Select server and channel
 3. Choose export format: **JSON** (recommended), TXT, or CSV
 4. Click **Export**
 
 **CLI:**
+
 ```bash
 # Export as JSON
 ./DiscordChatExporter.Cli export -t "YOUR_TOKEN" -c CHANNEL_ID -f Json -o chat.json
@@ -181,45 +183,6 @@ chatpack dc chat.csv
 
 | Format | Full Metadata | Attachments | Stickers |
 |--------|---------------|-------------|----------|
-| JSON | ✅ IDs, replies, edits | ✅ | ✅ |
-| TXT | ⚠️ Timestamps only | ✅ | ✅ |
-| CSV | ⚠️ Timestamps only | ✅ | ❌ |
-
----
-
-## Tips
-
-### Combine multiple files
-
-```bash
-# Telegram - usually single file
-chatpack tg result.json
-
-# WhatsApp - single file per chat
-chatpack wa chat1.txt
-chatpack wa chat2.txt
-
-# Instagram - may have multiple parts
-cat message_1.json message_2.json > combined.json
-chatpack ig combined.json
-
-# Discord - export each channel separately
-chatpack dc general.json
-chatpack dc random.json
-```
-
-### Check file format
-
-```bash
-# Should be JSON
-head -1 result.json
-# Expected: {"name": "Chat Name", ...
-
-# Should be WhatsApp TXT
-head -1 chat.txt
-# Expected: [1/15/24, 10:30 AM] Alice: Hello
-
-# Discord JSON
-head -1 discord.json
-# Expected: {"guild": ..., "channel": ..., "messages": ...
-```
+| JSON | Yes (IDs, replies, edits) | Yes | Yes |
+| TXT | Partial (timestamps only) | Yes | Yes |
+| CSV | Partial (timestamps only) | Yes | No |

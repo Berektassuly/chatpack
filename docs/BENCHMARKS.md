@@ -1,4 +1,4 @@
-# 📊 Benchmarks & Statistics
+# Benchmarks
 
 Real-world compression metrics and performance data.
 
@@ -10,17 +10,17 @@ Tested with Telegram export (34,478 messages), measured with OpenAI tokenizer (c
 
 | Format | Input Tokens | Output Tokens | Compression | Ratio |
 |--------|-------------|---------------|-------------|-------|
-| Raw JSON | 11,177,258 | — | baseline | 1x |
-| **CSV** | — | 849,915 | **92.4%** | **13.2x** 🔥 |
-| JSONL | — | 1,029,130 | 90.8% | 10.9x |
-| JSON | — | 1,333,586 | 88.1% | 8.4x |
+| Raw JSON | 11,177,258 | - | baseline | 1x |
+| **CSV** | - | 849,915 | **92.4%** | **13.2x** |
+| JSONL | - | 1,029,130 | 90.8% | 10.9x |
+| JSON | - | 1,333,586 | 88.1% | 8.4x |
 
 ### Why CSV wins
 
 | Factor | CSV | JSON | JSONL |
 |--------|-----|------|-------|
-| Brackets `{}[]` | ❌ None | ✅ `[{},{}]` | ✅ `{}` per line |
-| Key names | ❌ Header only | ✅ Every message | ✅ Every message |
+| Brackets `{}[]` | None | `[{},{}]` | `{}` per line |
+| Key names | Header only | Every message | Every message |
 | Quotes | Minimal | Every string | Every string |
 | Delimiter | `;` (1 char) | `,` + spaces | newline |
 
@@ -113,24 +113,10 @@ Consecutive messages from the same sender are merged into one entry.
 
 ### When merging helps most
 
-- **Group chats with few participants** — people send many short messages
-- **Personal chats** — rapid back-and-forth
-- **Voice message transcripts** — often split into fragments
-- **Discord announcements** — admins often send consecutive updates
-
----
-
-## Memory Usage
-
-chatpack loads entire file into memory. Expected usage:
-
-| File Size | RAM Usage |
-|-----------|-----------|
-| 10 MB | ~30 MB |
-| 100 MB | ~300 MB |
-| 1 GB | ~3 GB |
-
-*For files >1GB, consider splitting by date ranges.*
+- **Group chats with few participants** - people send many short messages
+- **Personal chats** - rapid back-and-forth
+- **Voice message transcripts** - often split into fragments
+- **Discord announcements** - admins often send consecutive updates
 
 ---
 
@@ -140,28 +126,28 @@ chatpack loads entire file into memory. Expected usage:
 
 | Criterion | CSV | JSON | JSONL |
 |-----------|-----|------|-------|
-| Token efficiency | ⭐⭐⭐ | ⭐ | ⭐ |
-| Readability | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
-| Copy-paste friendly | ⭐⭐⭐ | ⭐⭐ | ⭐ |
-| **Recommendation** | ✅ Best | OK | Not ideal |
+| Token efficiency | Best | Low | Low |
+| Readability | Good | Best | Good |
+| Copy-paste friendly | Best | Good | Low |
+| **Recommendation** | **Best** | OK | Not ideal |
 
 ### For RAG/Vector DB
 
 | Criterion | CSV | JSON | JSONL |
 |-----------|-----|------|-------|
-| One doc per line | ❌ | ❌ | ⭐⭐⭐ |
-| Streaming parse | ⭐ | ❌ | ⭐⭐⭐ |
-| Schema flexibility | ⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
-| **Recommendation** | Not ideal | OK | ✅ Best |
+| One doc per line | No | No | Best |
+| Streaming parse | Low | No | Best |
+| Schema flexibility | Low | Best | Best |
+| **Recommendation** | Not ideal | OK | **Best** |
 
 ### For archival/analysis
 
 | Criterion | CSV | JSON | JSONL |
 |-----------|-----|------|-------|
-| Full metadata | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
-| Excel/Sheets | ⭐⭐⭐ | ❌ | ❌ |
-| jq/scripting | ⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
-| **Recommendation** | For spreadsheets | ✅ Best | Also good |
+| Full metadata | Good | Best | Best |
+| Excel/Sheets | Best | No | No |
+| jq/scripting | Low | Best | Best |
+| **Recommendation** | For spreadsheets | **Best** | Also good |
 
 ---
 
@@ -179,10 +165,10 @@ Toxic data generator with:
 
 | Test | Status |
 |------|--------|
-| No crashes | ✅ Pass |
-| CSV escaping correct | ✅ Pass |
-| Unicode preserved | ✅ Pass |
-| Empty filtered | ✅ Pass |
+| No crashes | Pass |
+| CSV escaping correct | Pass |
+| Unicode preserved | Pass |
+| Empty filtered | Pass |
 | Throughput | 17-24K msg/s |
 
 ---
@@ -206,4 +192,3 @@ cargo bench --bench parsing -- --baseline main
 ---
 
 *Last updated: December 2025*
-*Benchmarks run on Linux with Criterion.rs*
