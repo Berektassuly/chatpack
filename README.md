@@ -65,7 +65,7 @@ chatpack wa chat.txt --from "Alice" --after 2024-01-01 -f json
 
 ## Features
 
-- 🚀 **Fast** — 20K+ messages/sec
+- 🚀 **Fast** — 1.6M+ messages/sec (full pipeline)
 - 📱 **Multi-platform** — Telegram, WhatsApp, Instagram, Discord
 - 🔀 **Smart merge** — Consecutive messages from same sender → one entry
 - 🎯 **Filters** — By date, by sender
@@ -255,9 +255,15 @@ chatpack tg chat.json -o out.csv  # Custom output path
 
 | Metric | Value |
 |--------|-------|
-| Speed | 20-50K messages/sec |
+| Full pipeline | 1.6-1.7 M messages/sec |
+| Parsing (Instagram) | 2.6-2.8 M messages/sec |
+| Parsing (Telegram) | 1.4-2.0 M messages/sec |
+| Parsing (Discord) | 1.5-1.8 M messages/sec |
+| Operations (merge/filter) | 11-14 M messages/sec |
 | CSV compression | 13x (92% token reduction) |
 | Tested file size | 500MB+ |
+
+> Run `cargo bench --bench parsing` to reproduce benchmarks.
 
 ## License
 
