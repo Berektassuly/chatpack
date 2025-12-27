@@ -36,6 +36,68 @@ Tested with Telegram export (34,478 messages), measured with OpenAI tokenizer (c
 
 ---
 
+## Criterion Benchmark Results
+
+All benchmarks run with `cargo bench --bench parsing` on release build.
+
+### Parsing Performance
+
+| Platform | 100 msgs | 1K msgs | 10K msgs | 50K msgs |
+|----------|----------|---------|----------|----------|
+| **Instagram** | 37.9 µs | 377 µs | 3.6 ms | 18.0 ms |
+| **Telegram** | 49.2 µs | 487 µs | 7.2 ms | 32.0 ms |
+| **Discord** | 60.1 µs | 567 µs | 5.6 ms | 32.1 ms |
+| **WhatsApp** | 2.6 ms | 4.4 ms | 22.3 ms | 102.2 ms |
+
+### Throughput (messages/second)
+
+| Platform | Throughput |
+|----------|------------|
+| **Instagram** | 2.6-2.8 M/s |
+| **Telegram** | 1.4-2.0 M/s |
+| **Discord** | 1.5-1.8 M/s |
+| **WhatsApp** | 38-489 K/s |
+
+> WhatsApp uses regex-based text parsing, hence slower than JSON parsers.
+
+### Operations Performance
+
+| Operation | 100 msgs | 1K msgs | 10K msgs | 100K msgs |
+|-----------|----------|---------|----------|-----------|
+| **Merge consecutive** | 8.9 µs | 84 µs | 690 µs | 7.0 ms |
+| **Filter by sender** | 8.2 µs | 75 µs | 744 µs | 7.4 ms |
+| **Filter by date** | 8.1 µs | 77 µs | 764 µs | 7.4 ms |
+
+| Operation | Throughput |
+|-----------|------------|
+| Merge consecutive | 11-14 M/s |
+| Filter by sender | 12-13 M/s |
+| Filter by date | 12-13 M/s |
+
+### Output Format Performance
+
+| Format | 100 msgs | 1K msgs | 10K msgs |
+|--------|----------|---------|----------|
+| **CSV** | 8.1 µs | 77 µs | 874 µs |
+| **JSONL** | 10.4 µs | 102 µs | 998 µs |
+| **JSON** | 16.6 µs | 158 µs | 1.5 ms |
+
+| Format | Throughput |
+|--------|------------|
+| CSV | 11-12 M/s |
+| JSONL | 9-10 M/s |
+| JSON | 6.0-6.6 M/s |
+
+### Full Pipeline (Parse → Merge → Filter → Output)
+
+| Messages | Time | Throughput |
+|----------|------|------------|
+| 1K | 602 µs | 1.66 M/s |
+| 10K | 5.9 ms | 1.70 M/s |
+| 50K | 29.8 ms | 1.68 M/s |
+
+---
+
 ## Message Merging
 
 Consecutive messages from the same sender are merged into one entry.
@@ -55,34 +117,6 @@ Consecutive messages from the same sender are merged into one entry.
 - **Personal chats** — rapid back-and-forth
 - **Voice message transcripts** — often split into fragments
 - **Discord announcements** — admins often send consecutive updates
-
----
-
-## Processing Speed
-
-### By platform (real data)
-
-| Platform | Messages | File Size | Time | Throughput |
-|----------|----------|-----------|------|------------|
-| Telegram | 34,478 | ~10 MB | 0.21s | 162K msg/s |
-| Discord TXT | 1,232 | 646 KB | 0.01s | 85K msg/s |
-
-### By output format (34K Telegram messages)
-
-| Format | Time | Speed |
-|--------|------|-------|
-| CSV | 0.21s | **162K msg/s** |
-| JSON | 0.18s | **186K msg/s** |
-| JSONL | 0.26s | **131K msg/s** |
-
-### By operation (34K messages)
-
-| Operation | Time |
-|-----------|------|
-| Parse JSON | 0.15-0.22s |
-| Merge | 0.00-0.01s |
-| Write output | 0.03-0.04s |
-| **Total** | **0.18-0.26s** |
 
 ---
 
@@ -153,26 +187,23 @@ Toxic data generator with:
 
 ---
 
-## Your Own Benchmarks
-
-Run the included stress test:
+## Run Your Own Benchmarks
 
 ```bash
-# Generate 100K toxic messages
-cargo run --release --bin gen_test -- 100000 heavy_test.json telegram
+# Run all benchmarks
+cargo bench --bench parsing
 
-# Process and see stats
-./target/release/chatpack tg heavy_test.json
-```
+# Run specific benchmark
+cargo bench --bench parsing -- telegram_parsing
 
-Output includes:
-```
-⚡ Performance:
-   Total time:  3.57s
-   Throughput:  28011 messages/sec
+# Save baseline for comparison
+cargo bench --bench parsing -- --save-baseline main
+
+# Compare against baseline
+cargo bench --bench parsing -- --baseline main
 ```
 
 ---
 
 *Last updated: December 2025*
-*Contributions welcome! Add your benchmarks via PR.*
+*Benchmarks run on Linux with Criterion.rs*
