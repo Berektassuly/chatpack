@@ -49,8 +49,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::ChatpackError;
 use crate::Message;
+use crate::error::ChatpackError;
 
 #[cfg(feature = "streaming")]
 use crate::streaming::MessageIterator;
@@ -106,7 +106,14 @@ impl Platform {
     /// Returns all platform names including aliases.
     pub fn all_names() -> &'static [&'static str] {
         &[
-            "telegram", "tg", "whatsapp", "wa", "instagram", "ig", "discord", "dc",
+            "telegram",
+            "tg",
+            "whatsapp",
+            "wa",
+            "instagram",
+            "ig",
+            "discord",
+            "dc",
         ]
     }
 
@@ -197,7 +204,9 @@ impl Iterator for ParseIterator {
     type Item = Result<Message, ChatpackError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|result| result.map_err(ChatpackError::from))
+        self.inner
+            .next()
+            .map(|result| result.map_err(ChatpackError::from))
     }
 }
 
@@ -331,14 +340,22 @@ pub trait Parser: Send + Sync {
     /// # #[cfg(not(feature = "telegram"))]
     /// # fn main() {}
     /// ```
-    fn stream(&self, path: &Path) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError> {
+    fn stream(
+        &self,
+        path: &Path,
+    ) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError>
+    {
         // Default implementation: load everything into memory
         let messages = self.parse(path)?;
         Ok(Box::new(messages.into_iter().map(Ok)))
     }
 
     /// Streams messages (convenience method accepting &str path).
-    fn stream_file(&self, path: &str) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError> {
+    fn stream_file(
+        &self,
+        path: &str,
+    ) -> Result<Box<dyn Iterator<Item = Result<Message, ChatpackError>> + Send>, ChatpackError>
+    {
         self.stream(Path::new(path))
     }
 
@@ -454,7 +471,10 @@ mod tests {
         assert_eq!(Platform::from_str("TELEGRAM").unwrap(), Platform::Telegram);
         assert_eq!(Platform::from_str("whatsapp").unwrap(), Platform::WhatsApp);
         assert_eq!(Platform::from_str("wa").unwrap(), Platform::WhatsApp);
-        assert_eq!(Platform::from_str("instagram").unwrap(), Platform::Instagram);
+        assert_eq!(
+            Platform::from_str("instagram").unwrap(),
+            Platform::Instagram
+        );
         assert_eq!(Platform::from_str("ig").unwrap(), Platform::Instagram);
         assert_eq!(Platform::from_str("discord").unwrap(), Platform::Discord);
         assert_eq!(Platform::from_str("dc").unwrap(), Platform::Discord);

@@ -100,7 +100,12 @@ pub enum ChatpackError {
     /// JSON parsing/serialization error.
     ///
     /// This can occur when parsing or writing JSON.
-    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord", feature = "json-output"))]
+    #[cfg(any(
+        feature = "telegram",
+        feature = "instagram",
+        feature = "discord",
+        feature = "json-output"
+    ))]
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
@@ -147,7 +152,12 @@ pub enum ChatpackError {
 #[derive(Debug, Error)]
 pub enum ParseErrorKind {
     /// JSON parsing error
-    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord", feature = "json-output"))]
+    #[cfg(any(
+        feature = "telegram",
+        feature = "instagram",
+        feature = "discord",
+        feature = "json-output"
+    ))]
     #[error("{0}")]
     Json(#[from] serde_json::Error),
     /// Regex/pattern matching error
@@ -165,7 +175,12 @@ pub enum StreamingErrorKind {
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
     /// JSON parsing error during streaming
-    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord", feature = "json-output"))]
+    #[cfg(any(
+        feature = "telegram",
+        feature = "instagram",
+        feature = "discord",
+        feature = "json-output"
+    ))]
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
     /// Invalid format encountered
@@ -173,10 +188,7 @@ pub enum StreamingErrorKind {
     InvalidFormat(String),
     /// Buffer overflow
     #[error("Buffer overflow: {actual_size} bytes (max: {max_size})")]
-    BufferOverflow {
-        max_size: usize,
-        actual_size: usize,
-    },
+    BufferOverflow { max_size: usize, actual_size: usize },
     /// Unexpected EOF
     #[error("Unexpected end of file")]
     UnexpectedEof,
@@ -298,7 +310,12 @@ impl ChatpackError {
 
 #[cfg(all(
     feature = "streaming",
-    any(feature = "telegram", feature = "whatsapp", feature = "instagram", feature = "discord")
+    any(
+        feature = "telegram",
+        feature = "whatsapp",
+        feature = "instagram",
+        feature = "discord"
+    )
 ))]
 impl From<crate::streaming::StreamingError> for ChatpackError {
     #[allow(unreachable_patterns)]
@@ -326,7 +343,7 @@ impl From<crate::streaming::StreamingError> for ChatpackError {
             }
             // Catch-all for when Json variant is not available
             _ => ChatpackError::Streaming(StreamingErrorKind::InvalidFormat(
-                "Unknown streaming error".to_string()
+                "Unknown streaming error".to_string(),
             )),
         }
     }
@@ -349,7 +366,12 @@ mod tests {
         assert!(display.contains("file not found"));
     }
 
-    #[cfg(any(feature = "telegram", feature = "instagram", feature = "discord", feature = "json-output"))]
+    #[cfg(any(
+        feature = "telegram",
+        feature = "instagram",
+        feature = "discord",
+        feature = "json-output"
+    ))]
     #[test]
     fn test_parse_error_with_path() {
         let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
@@ -411,15 +433,15 @@ mod tests {
 
     #[test]
     fn test_result_type_alias() {
-        fn returns_result() -> Result<i32> {
-            Ok(42)
+        fn returns_result() -> i32 {
+            42
         }
 
         fn returns_error() -> Result<i32> {
             Err(ChatpackError::invalid_date("bad"))
         }
 
-        assert!(returns_result().is_ok());
+        assert_eq!(returns_result(), 42);
         assert!(returns_error().is_err());
     }
 }

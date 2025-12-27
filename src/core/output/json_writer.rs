@@ -5,9 +5,9 @@ use std::io::Write;
 
 use serde::Serialize;
 
+use crate::Message;
 use crate::core::models::OutputConfig;
 use crate::error::ChatpackError;
-use crate::Message;
 
 /// Minimal message structure for JSON output.
 /// Only includes fields enabled in `OutputConfig`.
@@ -76,10 +76,7 @@ pub fn write_json(
 ///
 /// Same format as `write_json`, but returns a String instead of writing to file.
 /// Useful for WASM environments where file system access is not available.
-pub fn to_json(
-    messages: &[Message],
-    config: &OutputConfig,
-) -> Result<String, ChatpackError> {
+pub fn to_json(messages: &[Message], config: &OutputConfig) -> Result<String, ChatpackError> {
     let json_messages: Vec<JsonMessage> = messages
         .iter()
         .map(|m| JsonMessage::from_message(m, config))
@@ -96,10 +93,7 @@ mod tests {
 
     #[test]
     fn test_to_json_basic() {
-        let messages = vec![
-            Message::new("Alice", "Hello"),
-            Message::new("Bob", "Hi"),
-        ];
+        let messages = vec![Message::new("Alice", "Hello"), Message::new("Bob", "Hi")];
         let config = OutputConfig::new();
 
         let json = to_json(&messages, &config).unwrap();
@@ -111,10 +105,7 @@ mod tests {
 
     #[test]
     fn test_write_json_basic() {
-        let messages = vec![
-            Message::new("Alice", "Hello"),
-            Message::new("Bob", "Hi"),
-        ];
+        let messages = vec![Message::new("Alice", "Hello"), Message::new("Bob", "Hi")];
 
         let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_str().unwrap();

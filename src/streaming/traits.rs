@@ -1,7 +1,7 @@
 //! Core traits for streaming parsers.
 
-use crate::error::ChatpackError;
 use crate::Message;
+use crate::error::ChatpackError;
 
 use super::StreamingResult;
 

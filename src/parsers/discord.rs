@@ -13,10 +13,10 @@ use serde::Deserialize;
 
 #[allow(deprecated)]
 use super::ChatParser;
+use crate::Message;
 use crate::config::DiscordConfig;
 use crate::error::ChatpackError;
 use crate::parser::{Parser, Platform};
-use crate::Message;
 
 #[cfg(feature = "streaming")]
 use crate::streaming::{DiscordStreamingParser, StreamingConfig, StreamingParser};
@@ -302,10 +302,7 @@ impl DiscordParser {
     }
 
     #[allow(clippy::unused_self)]
-    fn parse_csv_reader<R: std::io::Read>(
-        &self,
-        reader: R,
-    ) -> Result<Vec<Message>, ChatpackError> {
+    fn parse_csv_reader<R: std::io::Read>(&self, reader: R) -> Result<Vec<Message>, ChatpackError> {
         let mut csv_reader = csv::ReaderBuilder::new()
             .has_headers(true)
             .flexible(true)
@@ -482,9 +479,12 @@ impl Parser for DiscordParser {
                 .with_skip_invalid(self.config.skip_invalid);
 
             let streaming_parser = DiscordStreamingParser::with_config(streaming_config);
-            let iterator = StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
+            let iterator =
+                StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
 
-            Ok(Box::new(iterator.map(|result| result.map_err(ChatpackError::from))))
+            Ok(Box::new(
+                iterator.map(|result| result.map_err(ChatpackError::from)),
+            ))
         } else {
             // Fallback: load everything into memory
             let messages = Parser::parse(self, path)?;

@@ -73,8 +73,8 @@ pub use whatsapp::WhatsAppParser;
 // Re-export the new unified Parser trait and Platform
 pub use crate::parser::{Parser, Platform};
 
-use crate::error::ChatpackError;
 use crate::Message;
+use crate::error::ChatpackError;
 
 /// Legacy trait for parsing chat exports from different platforms.
 ///
@@ -82,7 +82,10 @@ use crate::Message;
 /// a unified API with streaming support.
 ///
 /// Each platform-specific parser implements this trait for backward compatibility.
-#[deprecated(since = "0.5.0", note = "Use the `Parser` trait from `chatpack::parser` instead")]
+#[deprecated(
+    since = "0.5.0",
+    note = "Use the `Parser` trait from `chatpack::parser` instead"
+)]
 pub trait ChatParser: Send + Sync {
     /// Returns the name of the parser (e.g., "Telegram", "WhatsApp").
     fn name(&self) -> &'static str;
@@ -148,7 +151,10 @@ pub fn create_parser(source: crate::cli::Source) -> Box<dyn ChatParser> {
         Source::Discord => Box::new(DiscordParser::new()),
         // Fallback for when features are disabled
         #[allow(unreachable_patterns)]
-        _ => panic!("Parser for {:?} is not enabled. Enable the corresponding feature.", source),
+        _ => panic!(
+            "Parser for {:?} is not enabled. Enable the corresponding feature.",
+            source
+        ),
     }
 }
 

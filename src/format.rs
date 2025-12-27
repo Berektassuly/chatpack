@@ -30,9 +30,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::Message;
 use crate::core::models::OutputConfig;
 use crate::error::ChatpackError;
-use crate::Message;
 
 /// Output format for chat exports.
 ///
@@ -132,11 +132,7 @@ impl OutputFormat {
     /// assert_eq!(format, OutputFormat::Jsonl);
     /// ```
     pub fn from_path(path: &str) -> Result<Self, ChatpackError> {
-        let ext = path
-            .rsplit('.')
-            .next()
-            .unwrap_or("")
-            .to_lowercase();
+        let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
 
         match ext.as_str() {
             "csv" => Ok(OutputFormat::Csv),
@@ -294,8 +290,14 @@ mod tests {
     fn test_format_from_str() {
         assert_eq!(OutputFormat::from_str("csv").unwrap(), OutputFormat::Csv);
         assert_eq!(OutputFormat::from_str("json").unwrap(), OutputFormat::Json);
-        assert_eq!(OutputFormat::from_str("jsonl").unwrap(), OutputFormat::Jsonl);
-        assert_eq!(OutputFormat::from_str("ndjson").unwrap(), OutputFormat::Jsonl);
+        assert_eq!(
+            OutputFormat::from_str("jsonl").unwrap(),
+            OutputFormat::Jsonl
+        );
+        assert_eq!(
+            OutputFormat::from_str("ndjson").unwrap(),
+            OutputFormat::Jsonl
+        );
         assert_eq!(OutputFormat::from_str("CSV").unwrap(), OutputFormat::Csv);
         assert!(OutputFormat::from_str("unknown").is_err());
     }
@@ -323,11 +325,26 @@ mod tests {
 
     #[test]
     fn test_format_from_path() {
-        assert_eq!(OutputFormat::from_path("output.csv").unwrap(), OutputFormat::Csv);
-        assert_eq!(OutputFormat::from_path("output.json").unwrap(), OutputFormat::Json);
-        assert_eq!(OutputFormat::from_path("output.jsonl").unwrap(), OutputFormat::Jsonl);
-        assert_eq!(OutputFormat::from_path("output.ndjson").unwrap(), OutputFormat::Jsonl);
-        assert_eq!(OutputFormat::from_path("/path/to/file.JSON").unwrap(), OutputFormat::Json);
+        assert_eq!(
+            OutputFormat::from_path("output.csv").unwrap(),
+            OutputFormat::Csv
+        );
+        assert_eq!(
+            OutputFormat::from_path("output.json").unwrap(),
+            OutputFormat::Json
+        );
+        assert_eq!(
+            OutputFormat::from_path("output.jsonl").unwrap(),
+            OutputFormat::Jsonl
+        );
+        assert_eq!(
+            OutputFormat::from_path("output.ndjson").unwrap(),
+            OutputFormat::Jsonl
+        );
+        assert_eq!(
+            OutputFormat::from_path("/path/to/file.JSON").unwrap(),
+            OutputFormat::Json
+        );
         assert!(OutputFormat::from_path("output.txt").is_err());
     }
 

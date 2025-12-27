@@ -2,9 +2,9 @@
 
 use std::fs::File;
 
+use crate::Message;
 use crate::core::models::OutputConfig;
 use crate::error::ChatpackError;
-use crate::Message;
 
 /// Writes messages to CSV file with semicolon delimiter.
 ///
@@ -43,10 +43,7 @@ pub fn write_csv(
 ///
 /// Same format as `write_csv`, but returns a String instead of writing to file.
 /// Useful for WASM environments where file system access is not available.
-pub fn to_csv(
-    messages: &[Message],
-    config: &OutputConfig,
-) -> Result<String, ChatpackError> {
+pub fn to_csv(messages: &[Message], config: &OutputConfig) -> Result<String, ChatpackError> {
     let mut writer = csv::WriterBuilder::new()
         .delimiter(b';')
         .from_writer(Vec::new());
