@@ -1,8 +1,44 @@
-//! Message processing utilities.
+//! Message merging and processing statistics.
 //!
-//! This module provides:
-//! - [`merge_consecutive`] - Merge consecutive messages from same sender
-//! - [`ProcessingStats`] - Statistics about processing results
+//! This module provides utilities for reducing message count while preserving
+//! conversation structure, primarily for LLM context optimization.
+//!
+//! # Overview
+//!
+//! | Function | Description |
+//! |----------|-------------|
+//! | [`merge_consecutive`] | Combine consecutive messages from same sender |
+//! | [`ProcessingStats`] | Track compression metrics |
+//!
+//! # Token Compression
+//!
+//! Merging consecutive messages typically achieves 30-50% reduction in message count,
+//! which translates to significant token savings when feeding to LLMs.
+//!
+//! # Examples
+//!
+//! ```
+//! use chatpack::core::processor::{merge_consecutive, ProcessingStats};
+//! use chatpack::Message;
+//!
+//! let messages = vec![
+//!     Message::new("Alice", "Hey"),
+//!     Message::new("Alice", "Are you there?"),
+//!     Message::new("Alice", "Hello???"),
+//!     Message::new("Bob", "Sorry, was busy"),
+//! ];
+//!
+//! let original_count = messages.len();
+//! let merged = merge_consecutive(messages);
+//!
+//! // 4 messages -> 2 messages (50% reduction)
+//! assert_eq!(merged.len(), 2);
+//! assert!(merged[0].content.contains("Hey"));
+//! assert!(merged[0].content.contains("Hello???"));
+//!
+//! let stats = ProcessingStats::new(original_count, merged.len());
+//! println!("{}", stats); // "4 → 2 messages (50.0% reduction)"
+//! ```
 
 use crate::Message;
 

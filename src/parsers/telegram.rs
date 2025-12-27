@@ -1,4 +1,6 @@
 //! Telegram JSON export parser.
+//!
+//! Parses JSON exports from Telegram Desktop's "Export chat history" feature.
 
 use std::fs;
 use std::path::Path;
@@ -12,9 +14,21 @@ use crate::parsing::telegram::{TelegramExport, parse_telegram_message};
 #[cfg(feature = "streaming")]
 use crate::streaming::{StreamingConfig, StreamingParser, TelegramStreamingParser};
 
-/// Parser for Telegram JSON exports.
+/// Parser for Telegram Desktop JSON exports.
 ///
-/// Telegram exports chats as JSON with the following structure:
+/// Handles the `result.json` file produced by Telegram Desktop's
+/// "Export chat history" feature (Settings > Advanced > Export).
+///
+/// # Supported Message Types
+///
+/// - Text messages (plain and with entities like links, mentions)
+/// - Service messages (joins, leaves, pins)
+/// - Forwarded messages
+/// - Replies (preserves `reply_to` reference)
+/// - Edited messages (preserves edit timestamp)
+///
+/// # JSON Structure
+///
 /// ```json
 /// {
 ///   "name": "Chat Name",
@@ -24,23 +38,27 @@ use crate::streaming::{StreamingConfig, StreamingParser, TelegramStreamingParser
 ///       "type": "message",
 ///       "date_unixtime": "1234567890",
 ///       "from": "Sender Name",
-///       "text": "Hello" | ["Hello", {"type": "link", "text": "url"}],
-///       "reply_to_message_id": 12344,
-///       "edited_unixtime": "1234567899"
+///       "text": "Hello"
 ///     }
 ///   ]
 /// }
 /// ```
 ///
-/// # Example
+/// # Examples
 ///
-/// ```rust,no_run
+/// ```no_run
 /// use chatpack::parsers::TelegramParser;
 /// use chatpack::parser::Parser;
 ///
+/// # fn main() -> chatpack::Result<()> {
 /// let parser = TelegramParser::new();
-/// let messages = parser.parse("telegram_export.json".as_ref())?;
-/// # Ok::<(), chatpack::ChatpackError>(())
+/// let messages = parser.parse("result.json".as_ref())?;
+///
+/// for msg in &messages {
+///     println!("{}: {}", msg.sender, msg.content);
+/// }
+/// # Ok(())
+/// # }
 /// ```
 pub struct TelegramParser {
     config: TelegramConfig,

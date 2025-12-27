@@ -1,10 +1,7 @@
 //! Instagram JSON export parser.
 //!
-//! Handles Meta's JSON exports with Mojibake encoding fix.
-//!
-//! Instagram exports messages as JSON (from "Download Your Data" feature).
-//! The main quirk is that Meta exports UTF-8 text encoded as ISO-8859-1,
-//! causing Cyrillic and other non-ASCII text to appear as garbage (Mojibake).
+//! Parses JSON exports from Meta's "Download Your Data" feature with
+//! automatic Mojibake encoding fix.
 
 use std::fs;
 use std::path::Path;
@@ -18,17 +15,49 @@ use crate::parsing::instagram::{InstagramExport, parse_instagram_message_owned};
 #[cfg(feature = "streaming")]
 use crate::streaming::{InstagramStreamingParser, StreamingConfig, StreamingParser};
 
-/// Parser for Instagram JSON exports.
+/// Parser for Instagram DM JSON exports.
 ///
-/// # Example
+/// Handles JSON files from Meta's "Download Your Data" feature (Settings >
+/// Privacy > Download Your Information). Parses files from the `messages/`
+/// directory.
 ///
-/// ```rust,no_run
+/// # Mojibake Fix
+///
+/// Meta exports UTF-8 text encoded as ISO-8859-1, causing non-ASCII characters
+/// (Cyrillic, emoji, etc.) to appear as garbage. This parser automatically
+/// detects and fixes this encoding issue.
+///
+/// # JSON Structure
+///
+/// ```json
+/// {
+///   "participants": [{"name": "Alice"}, {"name": "Bob"}],
+///   "messages": [
+///     {
+///       "sender_name": "Alice",
+///       "timestamp_ms": 1234567890000,
+///       "content": "Hello!"
+///     }
+///   ]
+/// }
+/// ```
+///
+/// # Examples
+///
+/// ```no_run
 /// use chatpack::parsers::InstagramParser;
 /// use chatpack::parser::Parser;
 ///
+/// # fn main() -> chatpack::Result<()> {
 /// let parser = InstagramParser::new();
-/// let messages = parser.parse("instagram_messages.json".as_ref())?;
-/// # Ok::<(), chatpack::ChatpackError>(())
+/// let messages = parser.parse("message_1.json".as_ref())?;
+///
+/// // Non-ASCII text is automatically fixed
+/// for msg in &messages {
+///     println!("{}: {}", msg.sender, msg.content);
+/// }
+/// # Ok(())
+/// # }
 /// ```
 pub struct InstagramParser {
     config: InstagramConfig,

@@ -1,77 +1,136 @@
-//! # Chatpack
+//! Parse and convert chat exports from messaging platforms into LLM-friendly formats.
 //!
-//! A Rust library for parsing and converting chat exports from popular messaging
-//! platforms into LLM-friendly formats.
+//! # Overview
 //!
-//! ## Overview
+//! Chatpack provides a unified API for parsing chat exports from popular messaging
+//! platforms and converting them into formats optimized for Large Language Models.
+//! It handles platform-specific quirks (encoding issues, date formats, message types)
+//! and provides tools for filtering, merging, and exporting messages.
 //!
-//! Chatpack provides a unified API for working with chat exports from:
-//! - **Telegram** - JSON exports from Telegram Desktop
-//! - **WhatsApp** - Text exports (both iOS and Android formats)
-//! - **Instagram** - JSON exports from Instagram data download
-//! - **Discord** - JSON/TXT/CSV exports from DiscordChatExporter
+//! **Supported platforms:**
 //!
-//! The library handles the complexity of different export formats and provides
-//! tools for filtering, merging, and outputting messages in formats optimized
-//! for use with Large Language Models.
+//! | Platform | Export Format | Special Handling |
+//! |----------|---------------|------------------|
+//! | Telegram | JSON | Service messages, forwarded messages |
+//! | WhatsApp | TXT | Auto-detects 4 locale-specific date formats |
+//! | Instagram | JSON | Fixes Mojibake encoding from Meta exports |
+//! | Discord | JSON/TXT/CSV | Attachments, stickers, replies |
 //!
-//! ## Feature Flags
+//! # Quick Start
 //!
-//! Chatpack uses feature flags to minimize dependencies:
-//!
-//! | Feature | Description | Dependencies |
-//! |---------|-------------|--------------|
-//! | `telegram` | Telegram parser | `serde_json` |
-//! | `whatsapp` | WhatsApp parser | `regex` |
-//! | `instagram` | Instagram parser | `serde_json` |
-//! | `discord` | Discord parser | `serde_json`, `regex`, `csv` |
-//! | `csv-output` | CSV output writer | `csv` |
-//! | `json-output` | JSON/JSONL output writers | `serde_json` |
-//! | `streaming` | Streaming parsers for large files | (none) |
-//! | `full` | Everything (default) | all above |
-//!
-//! ## Quick Start
-//!
-//! The [`parser`] module provides a unified API with streaming support:
-//!
-//! ```rust,no_run
-//! # #[cfg(all(feature = "telegram", feature = "json-output"))]
-//! # fn main() -> chatpack::Result<()> {
-//! use chatpack::parser::{Parser, Platform, create_parser};
+//! ```no_run
 //! use chatpack::prelude::*;
 //!
-//! // Parse a Telegram export
+//! # #[cfg(all(feature = "telegram", feature = "csv-output"))]
+//! # fn main() -> chatpack::Result<()> {
+//! // Parse Telegram export
 //! let parser = create_parser(Platform::Telegram);
-//! let messages = parser.parse("telegram_export.json".as_ref())?;
+//! let messages = parser.parse("export.json".as_ref())?;
 //!
-//! // Merge consecutive messages from the same sender
-//! let merged = merge_consecutive(messages);
-//!
-//! // Write to JSON
-//! write_json(&merged, "output.json", &OutputConfig::new())?;
-//!
+//! // Filter, merge, and export
+//! let filtered = apply_filters(messages, &FilterConfig::new().with_sender("Alice"));
+//! let merged = merge_consecutive(filtered);
+//! write_csv(&merged, "output.csv", &OutputConfig::default())?;
 //! # Ok(())
 //! # }
-//! # #[cfg(not(all(feature = "telegram", feature = "json-output")))]
+//! # #[cfg(not(all(feature = "telegram", feature = "csv-output")))]
 //! # fn main() {}
 //! ```
 //!
-//! ## Streaming for Large Files
+//! # Core Concepts
 //!
-//! For files larger than 1GB, use the streaming API to avoid memory issues:
+//! ## Message
 //!
-//! ```rust,no_run
+//! [`Message`] is the universal representation of a chat message across all platforms:
+//!
+//! ```
+//! use chatpack::Message;
+//!
+//! let msg = Message::new("Alice", "Hello, world!");
+//! assert_eq!(msg.sender, "Alice");
+//! assert_eq!(msg.content, "Hello, world!");
+//! ```
+//!
+//! ## Parser Trait
+//!
+//! All platform parsers implement the [`Parser`](parser::Parser) trait, providing
+//! a consistent interface:
+//!
+//! ```no_run
+//! # #[cfg(feature = "whatsapp")]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::parser::Parser;
+//! use chatpack::parsers::WhatsAppParser;
+//!
+//! let parser = WhatsAppParser::new();
+//!
+//! // Parse from file
+//! let messages = parser.parse("chat.txt".as_ref())?;
+//!
+//! // Or parse from string
+//! let content = "[1/15/24, 10:30:45 AM] Alice: Hello";
+//! let messages = parser.parse_str(content)?;
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "whatsapp"))]
+//! # fn main() {}
+//! ```
+//!
+//! # Common Patterns
+//!
+//! ## Filter by Date Range
+//!
+//! ```
+//! use chatpack::prelude::*;
+//!
+//! # fn main() -> chatpack::Result<()> {
+//! let messages = vec![
+//!     Message::new("Alice", "Old message"),
+//!     Message::new("Bob", "Recent message"),
+//! ];
+//!
+//! let filter = FilterConfig::new()
+//!     .with_date_from("2024-01-01")?
+//!     .with_date_to("2024-12-31")?;
+//!
+//! let filtered = apply_filters(messages, &filter);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Merge Consecutive Messages
+//!
+//! Combine messages from the same sender within a time window:
+//!
+//! ```
+//! use chatpack::prelude::*;
+//!
+//! let messages = vec![
+//!     Message::new("Alice", "Hello"),
+//!     Message::new("Alice", "How are you?"),
+//!     Message::new("Bob", "I'm fine!"),
+//! ];
+//!
+//! let merged = merge_consecutive(messages);
+//! assert_eq!(merged.len(), 2); // Alice's messages merged
+//! assert!(merged[0].content.contains("Hello"));
+//! assert!(merged[0].content.contains("How are you?"));
+//! ```
+//!
+//! ## Stream Large Files
+//!
+//! Process files larger than available memory:
+//!
+//! ```no_run
 //! # #[cfg(all(feature = "telegram", feature = "streaming"))]
 //! # fn main() -> chatpack::Result<()> {
-//! use chatpack::parser::{Parser, Platform, create_streaming_parser};
+//! use chatpack::prelude::*;
 //!
 //! let parser = create_streaming_parser(Platform::Telegram);
 //!
-//! // Process messages one at a time
 //! for result in parser.stream("huge_export.json".as_ref())? {
-//!     if let Ok(msg) = result {
-//!         println!("{}: {}", msg.sender, msg.content);
-//!     }
+//!     let msg = result?;
+//!     println!("{}: {}", msg.sender, msg.content);
 //! }
 //! # Ok(())
 //! # }
@@ -79,29 +138,77 @@
 //! # fn main() {}
 //! ```
 //!
-//! ## Module Structure
+//! ## Export to Multiple Formats
 //!
-//! - [`parser`] - **Unified parser API** (recommended)
-//!   - [`Parser`](parser::Parser) - Unified parser trait with streaming
-//!   - [`Platform`](parser::Platform) - Supported platforms enum
-//!   - [`create_parser`](parser::create_parser), [`create_streaming_parser`](parser::create_streaming_parser)
-//! - [`config`] - Parser configuration types
-//!   - [`TelegramConfig`](config::TelegramConfig), [`WhatsAppConfig`](config::WhatsAppConfig), etc.
-//! - [`core`] - Core types and functionality
-//!   - [`core::models`] - [`Message`], [`OutputConfig`]
-//!   - [`core::filter`] - [`FilterConfig`], [`apply_filters`]
-//!   - [`core::processor`] - [`merge_consecutive`], [`ProcessingStats`]
-//!   - [`core::output`] - [`write_json`], [`write_jsonl`], [`write_csv`]
-//! - [`parsers`] - Platform-specific parser implementations
-//!   - [`TelegramParser`], [`WhatsAppParser`], [`InstagramParser`], [`DiscordParser`]
-//! - [`streaming`] - Streaming parsers for large files (requires `streaming` feature)
-//!   - [`TelegramStreamingParser`], [`DiscordStreamingParser`]
-//! - [`format`] - Output format types
-//!   - [`OutputFormat`](format::OutputFormat), [`write_to_format`](format::write_to_format)
-//! - [`progress`] - Progress reporting for long-running operations
-//!   - [`Progress`](progress::Progress), [`ProgressCallback`](progress::ProgressCallback)
-//! - [`error`] - Unified error types ([`ChatpackError`], [`Result`])
-//! - [`prelude`] - Convenient re-exports
+//! ```no_run
+//! # #[cfg(all(feature = "csv-output", feature = "json-output"))]
+//! # fn main() -> chatpack::Result<()> {
+//! use chatpack::prelude::*;
+//!
+//! let messages = vec![Message::new("Alice", "Hello!")];
+//! let config = OutputConfig::new().with_timestamps();
+//!
+//! // CSV - best for LLM context (13x token compression)
+//! write_csv(&messages, "output.csv", &config)?;
+//!
+//! // JSON - structured array for APIs
+//! write_json(&messages, "output.json", &config)?;
+//!
+//! // JSONL - one object per line for RAG pipelines
+//! write_jsonl(&messages, "output.jsonl", &config)?;
+//! # Ok(())
+//! # }
+//! # #[cfg(not(all(feature = "csv-output", feature = "json-output")))]
+//! # fn main() {}
+//! ```
+//!
+//! # Module Structure
+//!
+//! | Module | Description |
+//! |--------|-------------|
+//! | [`parser`] | Unified parser API with [`Parser`](parser::Parser) trait and [`Platform`](parser::Platform) enum |
+//! | [`parsers`] | Platform-specific implementations: [`TelegramParser`](parsers::TelegramParser), [`WhatsAppParser`](parsers::WhatsAppParser), etc. |
+//! | [`config`] | Parser configurations: [`TelegramConfig`](config::TelegramConfig), [`WhatsAppConfig`](config::WhatsAppConfig), etc. |
+//! | [`core`] | Core types: [`Message`], [`OutputConfig`](core::OutputConfig), [`FilterConfig`](core::FilterConfig) |
+//! | [`streaming`] | Memory-efficient streaming parsers for large files |
+//! | [`format`] | Output formats: [`OutputFormat`](format::OutputFormat), [`write_to_format`](format::write_to_format) |
+//! | [`error`] | Error types: [`ChatpackError`], [`Result`] |
+//! | [`prelude`] | Convenient re-exports for common usage |
+//!
+//! # Feature Flags
+//!
+//! Enable only the features you need to minimize compile time and dependencies:
+//!
+//! | Feature | Description | Dependencies |
+//! |---------|-------------|--------------|
+//! | `telegram` | Telegram JSON parser | `serde_json` |
+//! | `whatsapp` | WhatsApp TXT parser | `regex` |
+//! | `instagram` | Instagram JSON parser | `serde_json` |
+//! | `discord` | Discord multi-format parser | `serde_json`, `regex`, `csv` |
+//! | `csv-output` | CSV output writer | `csv` |
+//! | `json-output` | JSON/JSONL output writers | `serde_json` |
+//! | `streaming` | Streaming parsers for large files | - |
+//! | `async` | Async parser support | `tokio` |
+//! | `full` | All features (default) | all above |
+//!
+//! ```toml
+//! # Cargo.toml - minimal configuration
+//! [dependencies]
+//! chatpack = { version = "0.5", default-features = false, features = ["telegram", "csv-output"] }
+//! ```
+//!
+//! # Serialization
+//!
+//! All public types implement [`serde::Serialize`] and [`serde::Deserialize`]:
+//!
+//! ```
+//! use chatpack::Message;
+//!
+//! let msg = Message::new("Alice", "Hello!");
+//! let json = serde_json::to_string(&msg).unwrap();
+//! let parsed: Message = serde_json::from_str(&json).unwrap();
+//! assert_eq!(msg.content, parsed.content);
+//! ```
 
 // Core modules (always available)
 pub mod config;
@@ -157,12 +264,25 @@ pub mod async_parser;
 pub use error::{ChatpackError, Result};
 pub use message::Message;
 
-/// Convenient re-exports for common usage.
+/// Convenient re-exports for common usage patterns.
 ///
-/// Import everything you need with a single line:
+/// This module provides a single import for the most commonly used types
+/// and functions. It's designed to cover 90% of use cases with minimal imports.
 ///
-/// ```rust
+/// # Example
+///
+/// ```
 /// use chatpack::prelude::*;
+///
+/// // Now you have access to:
+/// // - Message, ChatpackError, Result
+/// // - Platform, Parser, create_parser, create_streaming_parser
+/// // - FilterConfig, apply_filters
+/// // - OutputConfig, merge_consecutive
+/// // - write_csv, write_json, write_jsonl (with features)
+/// // - All platform parsers (with features)
+///
+/// let msg = Message::new("Alice", "Hello!");
 /// ```
 pub mod prelude {
     // Core message type

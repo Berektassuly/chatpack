@@ -1,12 +1,21 @@
-//! Message filtering by date and sender.
+//! Filter messages by date range and sender.
 //!
-//! This module provides filtering capabilities for chat messages:
-//! - Filter by date range (after/before)
-//! - Filter by sender name (case-insensitive)
+//! This module provides [`FilterConfig`] for defining filter criteria and
+//! [`apply_filters`] for filtering message collections.
 //!
-//! # Example
+//! # Filter Types
 //!
-//! ```rust
+//! | Filter | Method | Description |
+//! |--------|--------|-------------|
+//! | Date from | [`with_date_from`](FilterConfig::with_date_from) | Messages on or after date |
+//! | Date to | [`with_date_to`](FilterConfig::with_date_to) | Messages on or before date |
+//! | Sender | [`with_sender`](FilterConfig::with_sender) | Messages from specific user |
+//!
+//! # Examples
+//!
+//! ## Filter by Sender
+//!
+//! ```
 //! use chatpack::core::filter::{FilterConfig, apply_filters};
 //! use chatpack::Message;
 //!
@@ -16,91 +25,141 @@
 //!     Message::new("Alice", "How are you?"),
 //! ];
 //!
-//! // Filter to only Alice's messages
-//! let config = FilterConfig::new().with_user("Alice".to_string());
+//! // Case-insensitive sender matching
+//! let config = FilterConfig::new().with_sender("alice");
 //! let filtered = apply_filters(messages, &config);
 //!
 //! assert_eq!(filtered.len(), 2);
 //! ```
+//!
+//! ## Filter by Date Range
+//!
+//! ```
+//! use chatpack::core::filter::{FilterConfig, apply_filters};
+//! use chatpack::Message;
+//! use chrono::{TimeZone, Utc};
+//!
+//! # fn main() -> chatpack::Result<()> {
+//! let messages = vec![
+//!     Message::new("Alice", "Old").with_timestamp(Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap()),
+//!     Message::new("Alice", "New").with_timestamp(Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap()),
+//! ];
+//!
+//! let config = FilterConfig::new()
+//!     .with_date_from("2024-06-01")?
+//!     .with_date_to("2024-12-31")?;
+//!
+//! let filtered = apply_filters(messages, &config);
+//! assert_eq!(filtered.len(), 1);
+//! assert_eq!(filtered[0].content, "New");
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Behavior Notes
+//!
+//! - Messages without timestamps are **excluded** when date filters are active
+//! - Sender matching is case-insensitive for ASCII characters
+//! - Multiple filters are combined with AND logic
 
 use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::Message;
 use crate::error::ChatpackError;
 
-/// Configuration for filtering messages.
+/// Configuration for filtering messages by date and sender.
 ///
-/// Use the builder pattern to construct filter configurations:
+/// Filters are combined with AND logic: a message must match all active
+/// filters to be included in the result.
 ///
-/// ```rust
+/// # Examples
+///
+/// ```
 /// use chatpack::core::filter::FilterConfig;
 ///
-/// let config = FilterConfig::new()
-///     .after_date("2024-01-01").unwrap()
-///     .before_date("2024-12-31").unwrap()
-///     .with_user("Alice".to_string());
+/// # fn main() -> chatpack::Result<()> {
+/// // Filter by sender only
+/// let by_sender = FilterConfig::new().with_sender("Alice");
+///
+/// // Filter by date range
+/// let by_date = FilterConfig::new()
+///     .with_date_from("2024-01-01")?
+///     .with_date_to("2024-12-31")?;
+///
+/// // Combined filters
+/// let combined = FilterConfig::new()
+///     .with_sender("Alice")
+///     .with_date_from("2024-06-01")?;
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct FilterConfig {
-    /// Only include messages after this date
+    /// Include only messages on or after this timestamp.
     pub after: Option<DateTime<Utc>>,
-    /// Only include messages before this date
+
+    /// Include only messages on or before this timestamp.
     pub before: Option<DateTime<Utc>>,
-    /// Only include messages from this sender (case-insensitive)
+
+    /// Include only messages from this sender (case-insensitive).
     pub from: Option<String>,
 }
 
 impl FilterConfig {
     /// Creates a new empty filter configuration.
     ///
-    /// No filters are active by default.
+    /// No filters are active by default; all messages pass through.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Parse date string in YYYY-MM-DD format and set as "after" filter.
+    /// Sets the start date filter (inclusive).
     ///
-    /// The time is set to 00:00:00 UTC, so the specified date is included.
+    /// Only messages on or after this date will be included.
+    /// Date format: `YYYY-MM-DD`.
     ///
     /// # Errors
     ///
-    /// Returns [`ChatpackError::InvalidDate`] if the date string
-    /// doesn't match YYYY-MM-DD format.
+    /// Returns [`ChatpackError::InvalidDate`] if the format is invalid.
     ///
-    /// # Example
+    /// # Examples
     ///
-    /// ```rust
+    /// ```
     /// use chatpack::core::filter::FilterConfig;
     ///
+    /// # fn main() -> chatpack::Result<()> {
     /// let config = FilterConfig::new()
-    ///     .after_date("2024-01-01")
-    ///     .unwrap();
+    ///     .with_date_from("2024-01-01")?;
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn after_date(mut self, date_str: &str) -> Result<Self, ChatpackError> {
+    pub fn with_date_from(mut self, date_str: &str) -> Result<Self, ChatpackError> {
         let dt = parse_date_start(date_str)?;
         self.after = Some(dt);
         Ok(self)
     }
 
-    /// Parse date string in YYYY-MM-DD format and set as "before" filter.
+    /// Sets the end date filter (inclusive).
     ///
-    /// The time is set to 23:59:59 UTC to include the entire specified day.
+    /// Only messages on or before this date will be included.
+    /// Date format: `YYYY-MM-DD`.
     ///
     /// # Errors
     ///
-    /// Returns [`ChatpackError::InvalidDate`] if the date string
-    /// doesn't match YYYY-MM-DD format.
+    /// Returns [`ChatpackError::InvalidDate`] if the format is invalid.
     ///
-    /// # Example
+    /// # Examples
     ///
-    /// ```rust
+    /// ```
     /// use chatpack::core::filter::FilterConfig;
     ///
+    /// # fn main() -> chatpack::Result<()> {
     /// let config = FilterConfig::new()
-    ///     .before_date("2024-12-31")
-    ///     .unwrap();
+    ///     .with_date_to("2024-12-31")?;
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn before_date(mut self, date_str: &str) -> Result<Self, ChatpackError> {
+    pub fn with_date_to(mut self, date_str: &str) -> Result<Self, ChatpackError> {
         let naive = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
             .map_err(|_| ChatpackError::invalid_date(date_str))?;
 
@@ -111,55 +170,75 @@ impl FilterConfig {
         Ok(self)
     }
 
-    /// Set a `DateTime<Utc>` directly as the "after" filter.
-    /// Use this when you already have a parsed `DateTime`.
+    /// Sets the sender filter.
+    ///
+    /// Only messages from this sender will be included.
+    /// Matching is case-insensitive for ASCII characters.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chatpack::core::filter::FilterConfig;
+    ///
+    /// // Matches "Alice", "alice", "ALICE"
+    /// let config = FilterConfig::new().with_sender("Alice");
+    /// ```
+    #[must_use]
+    pub fn with_sender(mut self, sender: impl Into<String>) -> Self {
+        self.from = Some(sender.into());
+        self
+    }
+
+    // Legacy method names for backwards compatibility
+
+    /// Sets the start date filter. Alias for [`with_date_from`](Self::with_date_from).
+    #[doc(hidden)]
+    pub fn after_date(self, date_str: &str) -> Result<Self, ChatpackError> {
+        self.with_date_from(date_str)
+    }
+
+    /// Sets the end date filter. Alias for [`with_date_to`](Self::with_date_to).
+    #[doc(hidden)]
+    pub fn before_date(self, date_str: &str) -> Result<Self, ChatpackError> {
+        self.with_date_to(date_str)
+    }
+
+    /// Sets the sender filter. Alias for [`with_sender`](Self::with_sender).
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_user(self, user: String) -> Self {
+        self.with_sender(user)
+    }
+
+    /// Sets the start timestamp directly.
+    ///
+    /// Use this when you already have a parsed [`DateTime`].
     #[must_use]
     pub fn with_after(mut self, dt: DateTime<Utc>) -> Self {
         self.after = Some(dt);
         self
     }
 
-    /// Set a `DateTime<Utc>` directly as the "before" filter.
+    /// Sets the end timestamp directly.
     ///
-    /// Use this when you already have a parsed `DateTime`.
+    /// Use this when you already have a parsed [`DateTime`].
     #[must_use]
     pub fn with_before(mut self, dt: DateTime<Utc>) -> Self {
         self.before = Some(dt);
         self
     }
 
-    /// Set the sender filter.
-    ///
-    /// Filtering is case-insensitive for ASCII characters.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use chatpack::core::filter::FilterConfig;
-    ///
-    /// // Both "Alice" and "alice" will match
-    /// let config = FilterConfig::new()
-    ///     .with_user("Alice".to_string());
-    /// ```
-    #[must_use]
-    pub fn with_user(mut self, user: String) -> Self {
-        self.from = Some(user);
-        self
-    }
-
-    /// Check if any filter is active.
-    ///
-    /// Returns `true` if at least one of after, before, or from is set.
+    /// Returns `true` if any filter is active.
     pub fn is_active(&self) -> bool {
         self.after.is_some() || self.before.is_some() || self.from.is_some()
     }
 
-    /// Check if date filters are active.
+    /// Returns `true` if date filters are active.
     pub fn has_date_filter(&self) -> bool {
         self.after.is_some() || self.before.is_some()
     }
 
-    /// Check if sender filter is active.
+    /// Returns `true` if sender filter is active.
     pub fn has_user_filter(&self) -> bool {
         self.from.is_some()
     }
@@ -175,36 +254,41 @@ fn parse_date_start(date_str: &str) -> Result<DateTime<Utc>, ChatpackError> {
     Ok(naive_dt.and_utc())
 }
 
-/// Apply filters to a vector of messages.
+/// Filters a collection of messages based on the provided configuration.
 ///
-/// # Behavior
+/// Returns a new vector containing only messages that match all active filters.
+/// If no filters are active, returns the original messages unchanged.
 ///
-/// - Messages matching all active filters are kept
-/// - Sender matching is case-insensitive (ASCII)
-/// - Messages without timestamps are **excluded** when date filters are active
+/// # Filter Behavior
 ///
-/// # Performance
+/// - **Sender filter**: Case-insensitive ASCII matching
+/// - **Date filters**: Messages without timestamps are excluded
+/// - **Multiple filters**: Combined with AND logic
 ///
-/// This function consumes the input vector and returns a new filtered vector.
-/// For large datasets, consider streaming approaches.
+/// # Examples
 ///
-/// # Example
-///
-/// ```rust
+/// ```
 /// use chatpack::core::filter::{FilterConfig, apply_filters};
 /// use chatpack::Message;
 ///
 /// let messages = vec![
 ///     Message::new("Alice", "Hello"),
 ///     Message::new("Bob", "Hi"),
+///     Message::new("Alice", "Goodbye"),
 /// ];
 ///
-/// let config = FilterConfig::new().with_user("Alice".to_string());
+/// // Filter by sender
+/// let config = FilterConfig::new().with_sender("Alice");
 /// let filtered = apply_filters(messages, &config);
 ///
-/// assert_eq!(filtered.len(), 1);
-/// assert_eq!(filtered[0].sender(), "Alice");
+/// assert_eq!(filtered.len(), 2);
+/// assert!(filtered.iter().all(|m| m.sender() == "Alice"));
 /// ```
+///
+/// # Performance
+///
+/// This function consumes the input vector. For streaming use cases,
+/// apply filtering inline during iteration instead.
 pub fn apply_filters(messages: Vec<Message>, config: &FilterConfig) -> Vec<Message> {
     if !config.is_active() {
         return messages;

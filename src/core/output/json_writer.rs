@@ -1,4 +1,6 @@
-//! JSON output writer.
+//! JSON array output writer.
+//!
+//! Writes messages as a JSON array, suitable for APIs and structured data processing.
 
 use std::fs::File;
 use std::io::Write;
@@ -9,8 +11,9 @@ use crate::Message;
 use crate::core::models::OutputConfig;
 use crate::error::ChatpackError;
 
-/// Minimal message structure for JSON output.
-/// Only includes fields enabled in `OutputConfig`.
+/// Internal message representation for JSON serialization.
+///
+/// Only includes fields enabled in [`OutputConfig`].
 #[derive(Serialize)]
 struct JsonMessage {
     sender: String,
@@ -52,15 +55,38 @@ impl JsonMessage {
     }
 }
 
-/// Writes messages to JSON file as an array.
+/// Writes messages to a JSON file as an array.
+///
+/// Produces a pretty-printed JSON array suitable for APIs and structured
+/// data processing.
 ///
 /// # Format
+///
 /// ```json
 /// [
 ///   {"sender": "Alice", "content": "Hello"},
 ///   {"sender": "Bob", "content": "Hi"}
 /// ]
 /// ```
+///
+/// # Examples
+///
+/// ```no_run
+/// # #[cfg(feature = "json-output")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::prelude::*;
+///
+/// let messages = vec![Message::new("Alice", "Hello!")];
+/// write_json(&messages, "output.json", &OutputConfig::new())?;
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "json-output"))]
+/// # fn main() {}
+/// ```
+///
+/// # Errors
+///
+/// Returns [`ChatpackError::Io`] if the file cannot be created or written.
 pub fn write_json(
     messages: &[Message],
     output_path: &str,
@@ -72,10 +98,27 @@ pub fn write_json(
     Ok(())
 }
 
-/// Converts messages to JSON string as an array.
+/// Converts messages to a JSON array string.
 ///
-/// Same format as `write_json`, but returns a String instead of writing to file.
-/// Useful for WASM environments where file system access is not available.
+/// Same format as [`write_json`], but returns a [`String`] instead of writing
+/// to a file. Useful for WASM environments or API responses.
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(feature = "json-output")]
+/// # fn main() -> chatpack::Result<()> {
+/// use chatpack::prelude::*;
+///
+/// let messages = vec![Message::new("Alice", "Hello!")];
+/// let json = to_json(&messages, &OutputConfig::new())?;
+///
+/// assert!(json.contains(r#""sender": "Alice""#));
+/// # Ok(())
+/// # }
+/// # #[cfg(not(feature = "json-output"))]
+/// # fn main() {}
+/// ```
 pub fn to_json(messages: &[Message], config: &OutputConfig) -> Result<String, ChatpackError> {
     let json_messages: Vec<JsonMessage> = messages
         .iter()
