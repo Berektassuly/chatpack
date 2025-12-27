@@ -15,8 +15,6 @@ use std::path::Path;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
 
-#[allow(deprecated)]
-use super::ChatParser;
 use crate::Message;
 use crate::config::WhatsAppConfig;
 use crate::error::ChatpackError;
@@ -406,23 +404,6 @@ impl Parser for WhatsAppParser {
     #[cfg(feature = "streaming")]
     fn recommended_buffer_size(&self) -> usize {
         self.config.buffer_size
-    }
-}
-
-// Keep backward compatibility with ChatParser trait
-#[allow(deprecated)]
-impl ChatParser for WhatsAppParser {
-    fn name(&self) -> &'static str {
-        "WhatsApp"
-    }
-
-    fn parse(&self, file_path: &str) -> Result<Vec<Message>, ChatpackError> {
-        let content = fs::read_to_string(file_path)?;
-        self.parse_content(&content)
-    }
-
-    fn parse_str(&self, content: &str) -> Result<Vec<Message>, ChatpackError> {
-        self.parse_content(content)
     }
 }
 
