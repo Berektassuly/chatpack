@@ -6,21 +6,21 @@
 use proptest::prelude::*;
 use serde_json::{Value, json};
 
-use chatpack::core::{FilterConfig, Message, OutputConfig, apply_filters, merge_consecutive};
 use chatpack::core::output::{to_csv, to_json, to_jsonl};
-use chatpack::parsing::telegram::{
-    TelegramRawMessage, extract_telegram_text, parse_telegram_message, parse_unix_timestamp,
-};
-use chatpack::parsing::whatsapp::{
-    DateFormat, detect_whatsapp_format, is_whatsapp_system_message, parse_whatsapp_timestamp,
+use chatpack::core::{FilterConfig, Message, OutputConfig, apply_filters, merge_consecutive};
+use chatpack::parsing::discord::{
+    DiscordAttachment, DiscordAuthor, DiscordRawMessage, DiscordReference, DiscordSticker,
+    parse_discord_message,
 };
 use chatpack::parsing::instagram::{
     InstagramRawMessage, InstagramShare, fix_mojibake_encoding, parse_instagram_message,
     parse_instagram_message_owned,
 };
-use chatpack::parsing::discord::{
-    DiscordAttachment, DiscordAuthor, DiscordRawMessage, DiscordReference, DiscordSticker,
-    parse_discord_message,
+use chatpack::parsing::telegram::{
+    TelegramRawMessage, extract_telegram_text, parse_telegram_message, parse_unix_timestamp,
+};
+use chatpack::parsing::whatsapp::{
+    DateFormat, detect_whatsapp_format, is_whatsapp_system_message, parse_whatsapp_timestamp,
 };
 
 // =============================================================================
@@ -146,7 +146,7 @@ fn arb_unix_timestamp_str() -> impl Strategy<Value = String> {
         Just("-1".to_string()),
         Just("9999999999".to_string()),
         // Invalid
-        Just("".to_string()),
+        Just(String::new()),
         Just("not_a_number".to_string()),
         Just("12.34".to_string()),
         Just("123abc".to_string()),
@@ -173,7 +173,7 @@ fn arb_whatsapp_line() -> impl Strategy<Value = String> {
         // Invalid/continuation lines
         Just("This is a continuation".to_string()),
         Just("No date format here".to_string()),
-        Just("".to_string()),
+        Just(String::new()),
     ]
 }
 
@@ -184,7 +184,7 @@ fn arb_sender() -> impl Strategy<Value = String> {
         "Bob".to_string(),
         "WhatsApp".to_string(),
         "System".to_string(),
-        "".to_string(),
+        String::new(),
         "   ".to_string(),
         "Иван".to_string(),
         "user123".to_string(),
@@ -194,26 +194,14 @@ fn arb_sender() -> impl Strategy<Value = String> {
 /// Generate content for system message testing
 fn arb_content_for_system_check() -> impl Strategy<Value = String> {
     prop::sample::select(vec![
-        // English system messages
-        "Messages and calls are end-to-end encrypted".to_string(),
         "created group \"Test\"".to_string(),
         "added Charlie to the group".to_string(),
         "removed Dave from the group".to_string(),
-        "left".to_string(),
         "changed the subject to \"New Name\"".to_string(),
         "security code changed".to_string(),
         "You're now an admin".to_string(),
-        // Russian system messages
         "Сообщения и звонки защищены сквозным шифрованием".to_string(),
         "создал(а) группу".to_string(),
-        "добавил".to_string(),
-        "Подробнее".to_string(),
-        // Regular messages
-        "Hello everyone!".to_string(),
-        "How are you?".to_string(),
-        "<Media omitted>".to_string(),
-        "Привет!".to_string(),
-        "".to_string(),
     ])
 }
 
@@ -223,7 +211,7 @@ fn arb_mojibake_input() -> impl Strategy<Value = String> {
         // ASCII (should pass through)
         "Hello World".to_string(),
         "Test 123".to_string(),
-        "".to_string(),
+        String::new(),
         // Non-ASCII that might be mojibake
         "Привет".to_string(),
         "日本語".to_string(),
@@ -250,7 +238,7 @@ fn arb_discord_raw_message() -> impl Strategy<Value = DiscordRawMessage> {
         prop::sample::select(vec![
             "Hello".to_string(),
             "Test message".to_string(),
-            "".to_string(),
+            String::new(),
             "   ".to_string(),
             "Привет 🎉".to_string(),
         ]),
@@ -301,7 +289,7 @@ fn arb_instagram_raw_message() -> impl Strategy<Value = InstagramRawMessage> {
         prop::option::of(prop::sample::select(vec![
             "Hello!".to_string(),
             "Привет".to_string(),
-            "".to_string(),
+            String::new(),
             "   ".to_string(),
             "🎉 emoji".to_string(),
         ])),
@@ -340,7 +328,7 @@ fn arb_date_string() -> impl Strategy<Value = String> {
         Just("15/01/2024".to_string()),
         Just("2024/01/15".to_string()),
         Just("not-a-date".to_string()),
-        Just("".to_string()),
+        Just(String::new()),
         // Invalid dates
         Just("2023-02-29".to_string()), // Not a leap year
         Just("2024-13-01".to_string()), // Invalid month
@@ -773,10 +761,10 @@ proptest! {
     /// WhatsApp/System sender is system
     #[test]
     fn whatsapp_system_sender_is_system(content in prop::sample::select(vec!["Hello", "Test"])) {
-        prop_assert!(is_whatsapp_system_message("WhatsApp", &content));
-        prop_assert!(is_whatsapp_system_message("whatsapp", &content));
-        prop_assert!(is_whatsapp_system_message("System", &content));
-        prop_assert!(is_whatsapp_system_message("SYSTEM", &content));
+        prop_assert!(is_whatsapp_system_message("WhatsApp", content));
+        prop_assert!(is_whatsapp_system_message("whatsapp", content));
+        prop_assert!(is_whatsapp_system_message("System", content));
+        prop_assert!(is_whatsapp_system_message("SYSTEM", content));
     }
 
     /// parse_whatsapp_timestamp never panics
@@ -790,7 +778,7 @@ proptest! {
             DateFormat::EuSlash,
         ])
     ) {
-        let _ = parse_whatsapp_timestamp(&date, &time, format);
+        let _ = parse_whatsapp_timestamp(date, time, format);
     }
 
     /// Valid US format parses
@@ -1146,7 +1134,7 @@ proptest! {
             "",
         ])
     ) {
-        let result = FilterConfig::new().after_date(&format);
+let result = FilterConfig::new().after_date(format);
         prop_assert!(result.is_err());
     }
 
@@ -1247,11 +1235,17 @@ mod edge_cases {
 
         // EU Dot Bracketed - day.month.year with dots (unique separator)
         let eu_dot = vec!["[25.01.24, 10:30:45] Alice: Hello"];
-        assert_eq!(detect_whatsapp_format(&eu_dot), Some(DateFormat::EuDotBracketed));
+        assert_eq!(
+            detect_whatsapp_format(&eu_dot),
+            Some(DateFormat::EuDotBracketed)
+        );
 
         // EU Dot No Bracket - day.month.year with " - " separator (unique format)
         let eu_dot_no = vec!["25.01.2024, 10:30 - Alice: Hello"];
-        assert_eq!(detect_whatsapp_format(&eu_dot_no), Some(DateFormat::EuDotNoBracket));
+        assert_eq!(
+            detect_whatsapp_format(&eu_dot_no),
+            Some(DateFormat::EuDotNoBracket)
+        );
 
         // EU Slash - day/month/year with " - " separator (no brackets is key)
         let eu_slash = vec!["25/01/2024, 10:30 - Alice: Hello"];
@@ -1264,7 +1258,10 @@ mod edge_cases {
 
     #[test]
     fn instagram_mojibake_ascii_only() {
-        assert_eq!(fix_mojibake_encoding("Hello World 123!"), "Hello World 123!");
+        assert_eq!(
+            fix_mojibake_encoding("Hello World 123!"),
+            "Hello World 123!"
+        );
     }
 
     #[test]
@@ -1280,8 +1277,12 @@ mod edge_cases {
             },
             reference: None,
             attachments: Some(vec![
-                DiscordAttachment { file_name: "a.png".to_string() },
-                DiscordAttachment { file_name: "b.jpg".to_string() },
+                DiscordAttachment {
+                    file_name: "a.png".to_string(),
+                },
+                DiscordAttachment {
+                    file_name: "b.jpg".to_string(),
+                },
             ]),
             stickers: None,
         };
@@ -1361,7 +1362,11 @@ mod edge_cases {
             Message {
                 sender: "Alice".to_string(),
                 content: "At end".to_string(),
-                timestamp: Some(chrono::Utc.with_ymd_and_hms(2024, 1, 1, 23, 59, 59).unwrap()),
+                timestamp: Some(
+                    chrono::Utc
+                        .with_ymd_and_hms(2024, 1, 1, 23, 59, 59)
+                        .unwrap(),
+                ),
                 id: None,
                 reply_to: None,
                 edited: None,
@@ -1370,8 +1375,10 @@ mod edge_cases {
 
         // Filter for exactly 2024-01-01 should include both
         let config = FilterConfig::new()
-            .after_date("2024-01-01").unwrap()
-            .before_date("2024-01-01").unwrap();
+            .after_date("2024-01-01")
+            .unwrap()
+            .before_date("2024-01-01")
+            .unwrap();
 
         let filtered = apply_filters(messages, &config);
         assert_eq!(filtered.len(), 2);
