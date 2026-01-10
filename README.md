@@ -122,22 +122,17 @@ Browser-based interface — no installation required. Separate repository: [chat
 
 ## Library
 
-Rust library for integration into your own projects.
+High-performance libraries for integration into your own projects. Available for **Rust** and **Python**.
 
-### Installation
+### 🦀 Rust Library
+
+#### Installation
 
 ```bash
 cargo add chatpack
 ```
 
-Or add to Cargo.toml:
-
-```toml
-[dependencies]
-chatpack = "0.5"
-```
-
-### Quick Start
+#### Quick Start
 
 ```rust
 use chatpack::prelude::*;
@@ -159,7 +154,31 @@ fn main() -> Result<()> {
 }
 ```
 
-See [Feature Flags](#feature-flags) for minimal installations.
+### 🐍 Python Library
+
+High-performance Python bindings powered by Rust and PyO3. Separate repository: [chatpack-python](https://github.com/Berektassuly/chatpack-python)
+
+#### Installation
+
+```bash
+pip install chatpack
+```
+
+#### Quick Start
+
+```python
+import chatpack
+
+# Parse Telegram export with automatic merging
+messages = chatpack.parse_telegram("result.json", merge=True)
+
+# Convert to list of dicts for pandas/JSON
+data = [m.to_dict() for m in messages]
+
+print(f"Processed {len(messages)} messages")
+```
+
+See [chatpack-python README](https://github.com/Berektassuly/chatpack-python) for full Python documentation.
 
 ---
 
@@ -201,6 +220,12 @@ Rust 2024 edition (rustc 1.85+). MSRV is tested in CI.
 
 ---
 
+## Minimum Supported Python Version
+
+Python 3.8+. Supported versions (3.8, 3.9, 3.10, 3.11, 3.12) are tested in CI.
+
+---
+
 ## Contributing
 
 Contributions welcome! Please:
@@ -222,5 +247,6 @@ MIT License. See [LICENSE](LICENSE) for details.
 | Repository | Description |
 |------------|-------------|
 | [chatpack](https://github.com/Berektassuly/chatpack) | Core library (this repo) |
+| [chatpack-python](https://github.com/Berektassuly/chatpack-python) | Python library (PyO3 bindings) |
 | [chatpack-cli](https://github.com/Berektassuly/chatpack-cli) | Command-line tool |
 | [chatpack-web](https://github.com/Berektassuly/chatpack-web) | Web interface (WASM) |
