@@ -42,25 +42,25 @@ The benchmark source is `benches/parsing.rs`.
 | `output_jsonl` | 100, 1K, 10K | JSONL serialization |
 | `full_pipeline` | 1K, 10K, 50K | Telegram parse -> merge -> CSV output |
 
-## Latest Local Snapshot
+## Published Criterion Snapshot
 
-The workspace currently contains a Criterion snapshot for the streaming groups under `target/criterion`. These numbers are useful as a local sanity check, not as portable release claims.
+The table below is derived from the Criterion `new/estimates.json` artifacts published on the [`gh-pages` benchmark branch](https://github.com/Berektassuly/chatpack/tree/gh-pages/benchmarks). Treat these as public benchmark artifacts for the current published snapshot; absolute timings still depend on CPU, runner, compiler version, and Criterion settings.
 
-| Benchmark | 100 | 1K | 10K | 50K |
-|-----------|-----|----|-----|-----|
-| `instagram_streaming` | 0.183 ms | 1.208 ms | 12.738 ms | 66.558 ms |
-| `instagram_streaming_tricky_strings` | 0.200 ms | 1.417 ms | 15.182 ms | 80.688 ms |
-| `telegram_streaming` | 0.230 ms | 1.522 ms | 16.838 ms | 78.938 ms |
-| `telegram_streaming_tricky_strings` | 0.254 ms | 1.824 ms | 19.048 ms | 91.204 ms |
+Throughput is approximated as benchmark size divided by Criterion's `mean.point_estimate`.
 
-Approximate throughput from the 50K-message runs:
-
-| Benchmark | Throughput |
-|-----------|------------|
-| `instagram_streaming` | 751K msg/s |
-| `instagram_streaming_tricky_strings` | 620K msg/s |
-| `telegram_streaming` | 633K msg/s |
-| `telegram_streaming_tricky_strings` | 548K msg/s |
+| Benchmark | Size | Mean Time | Approx. Throughput |
+|-----------|------|-----------|--------------------|
+| `full_pipeline` | 50K | 31.3 ms | ~1.6M msg/s |
+| `telegram_parsing` | 50K | 33.3 ms | ~1.5M msg/s |
+| `telegram_streaming` | 50K | 43.3 ms | ~1.15M msg/s |
+| `telegram_streaming_tricky_strings` | 50K | 50.3 ms | ~994K msg/s |
+| `instagram_parsing` | 50K | 15.1 ms | ~3.3M msg/s |
+| `discord_parsing` | 50K | 26.3 ms | ~1.9M msg/s |
+| `whatsapp_parsing` | 50K | 99.8 ms | ~501K msg/s |
+| `filter_by_sender` | 100K | 7.9 ms | ~12.7M msg/s |
+| `merge_consecutive` | 100K | 8.9 ms | ~11.2M msg/s |
+| `output_csv` | 10K | 0.77 ms | ~13M msg/s |
+| `output_jsonl` | 10K | 0.92 ms | ~10.8M msg/s |
 
 ## CI Coverage
 
@@ -98,4 +98,4 @@ cargo bench --bench parsing -- --noplot --save-baseline current
 
 CSV is usually the best format for copying a chat into an LLM context window. JSONL is usually the best format for retrieval pipelines because downstream tools can stream or index each message independently. JSON is easiest when another API expects a single structured array.
 
-Last reviewed: May 27, 2026.
+Last reviewed: May 28, 2026.
