@@ -12,7 +12,7 @@
 //! | Platform | Export Format | Special Handling |
 //! |----------|---------------|------------------|
 //! | Telegram | JSON | Service messages, forwarded messages |
-//! | WhatsApp | TXT | Auto-detects 4 locale-specific date formats |
+//! | WhatsApp | TXT | Auto-detects 5 locale-specific date formats |
 //! | Instagram | JSON | Fixes Mojibake encoding from Meta exports |
 //! | Discord | JSON/TXT/CSV | Attachments, stickers, replies |
 //!
@@ -194,7 +194,7 @@
 //! ```toml
 //! # Cargo.toml - minimal configuration
 //! [dependencies]
-//! chatpack = { version = "0.5", default-features = false, features = ["telegram", "csv-output"] }
+//! chatpack = { version = "0.6.0", default-features = false, features = ["telegram", "csv-output"] }
 //! ```
 //!
 //! # Serialization

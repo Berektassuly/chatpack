@@ -1,252 +1,163 @@
 # chatpack
 
-**Token-efficient chat export processing for LLM and RAG pipelines.**
+**Rust library for converting chat exports into compact, LLM- and RAG-ready data.**
 
 [![CI](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml/badge.svg)](https://github.com/berektassuly/chatpack/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/berektassuly/chatpack/branch/main/graph/badge.svg)](https://codecov.io/gh/berektassuly/chatpack)
 [![Crates.io](https://img.shields.io/crates/v/chatpack.svg)](https://crates.io/crates/chatpack)
 [![docs.rs](https://docs.rs/chatpack/badge.svg)](https://docs.rs/chatpack)
 [![Downloads](https://img.shields.io/crates/d/chatpack.svg)](https://crates.io/crates/chatpack)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-[Website](https://chatpack.berektassuly.com) |
 [API Docs](https://docs.rs/chatpack) |
+[Export Guide](docs/EXPORT_GUIDE.md) |
 [Benchmarks](docs/BENCHMARKS.md) |
-[Export Guide](docs/EXPORT_GUIDE.md)
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [CLI Tool](#cli-tool)
-- [Web Version](#web-version)
-- [Library](#library)
-- [Documentation](#documentation)
-- [Feature Flags](#feature-flags)
-- [Contributing](#contributing)
-- [License](#license)
-
----
+[Website](https://chatpack.berektassuly.com)
 
 ## Overview
 
-Chatpack parses chat exports from Telegram, WhatsApp, Instagram, and Discord, converting them into token-efficient formats for LLM analysis and RAG ingestion.
+`chatpack` is the core Rust crate behind the Chatpack ecosystem. It parses chat exports from Telegram, WhatsApp, Instagram, and Discord, normalizes them into one `Message` type, and writes token-efficient CSV, JSON, or JSONL output for LLM analysis, RAG ingestion, archival, and analytics.
 
-Raw chat exports waste 80%+ of tokens on JSON structure, metadata, and formatting. Chatpack removes this noise, achieving **13x compression** (92% token reduction) with CSV output.
+Raw messenger exports often spend most of their tokens on nested JSON, repeated field names, and metadata. In a real Telegram sample with 34,478 messages, CSV output reduced 11.2M raw-export tokens to about 850K tokens: **13.2x smaller**.
 
-```
-┌─────────────────┐                   ┌─────────────────┐
-│ Telegram JSON   │                   │ Clean CSV       │
-│ WhatsApp TXT    │ ──▶ chatpack ──▶ │ 13x compression │
-│ Instagram JSON  │                   │ LLM-ready       │
-│ Discord Export  │                   │ RAG-optimized   │
-└─────────────────┘                   └─────────────────┘
-```
+| Platform | Input | Notes |
+|----------|-------|-------|
+| Telegram | JSON | Parses Telegram Desktop `result.json`, formatted text, replies, edits, and service-message filtering |
+| WhatsApp | TXT | Auto-detects US and European date formats, multiline messages, media placeholders, and common system messages |
+| Instagram | JSON | Parses Meta `message_*.json` files, fixes common mojibake, and returns chronological messages |
+| Discord | JSON, TXT, CSV | Supports DiscordChatExporter outputs, attachments, stickers, replies, and edited timestamps where available |
 
-### Token Compression Results
-
-| Format | Input | Output | Compression |
-|--------|-------|--------|-------------|
-| **CSV** | 11.2M tokens | 850K tokens | **13x (92%)** |
-| JSONL | 11.2M tokens | 1.0M tokens | 11x (91%) |
-| JSON | 11.2M tokens | 1.3M tokens | 8x (88%) |
-
----
-
-## CLI Tool
-
-Command-line interface for chatpack. Separate repository: [chatpack-cli](https://github.com/Berektassuly/chatpack-cli)
-
-### Installation
-
-**From crates.io:**
-
-```bash
-cargo install chatpack-cli
-```
-
-**Pre-built binaries:** Download from [GitHub Releases](https://github.com/Berektassuly/chatpack-cli/releases)
-
-| Platform | Architecture | Download |
-|----------|--------------|----------|
-| Linux | x86_64 | `chatpack-linux-x86_64.tar.gz` |
-| Linux | ARM64 | `chatpack-linux-aarch64.tar.gz` |
-| macOS | Intel | `chatpack-macos-x86_64.tar.gz` |
-| macOS | Apple Silicon | `chatpack-macos-aarch64.tar.gz` |
-| Windows | x86_64 | `chatpack-windows-x86_64.zip` |
-
-### Usage
-
-```bash
-chatpack tg result.json           # Telegram
-chatpack wa chat.txt              # WhatsApp
-chatpack ig message_1.json        # Instagram
-chatpack dc export.json           # Discord
-```
-
-**Output:** `optimized_chat.csv` — ready for LLM analysis.
-
-### Options
-
-```bash
-chatpack tg chat.json -f json              # Output format: csv, json, jsonl
-chatpack tg chat.json -t                   # Include timestamps
-chatpack tg chat.json --after 2024-01-01   # Filter by date
-chatpack tg chat.json --from "Alice"       # Filter by sender
-chatpack tg chat.json --no-merge           # Disable message merging
-```
-
-Full documentation: [chatpack-cli README](https://github.com/Berektassuly/chatpack-cli)
-
----
-
-## Web Version
-
-Browser-based interface — no installation required. Separate repository: [chatpack-web](https://github.com/Berektassuly/chatpack-web)
-
-### 🌐 [chatpack.berektassuly.com](https://chatpack.berektassuly.com)
-
-- **100% Private** — All processing happens locally via WebAssembly
-- **Files never leave your device** — No server uploads
-- **Fast** — Rust-powered WASM, 100K+ messages/sec
-
-### How to Use
-
-1. Drag & drop your export file
-2. Select source platform and output format
-3. Click Convert
-4. Download the result
-
----
-
-## Library
-
-High-performance libraries for integration into your own projects. Available for **Rust** and **Python**.
-
-### 🦀 Rust Library
-
-#### Installation
+## Install
 
 ```bash
 cargo add chatpack
 ```
 
-#### Quick Start
+Minimal builds can opt into only the parsers and writers they need:
+
+```toml
+[dependencies]
+chatpack = { version = "0.6.0", default-features = false, features = ["telegram", "csv-output"] }
+```
+
+## Quick Start
 
 ```rust
+use std::path::Path;
+
 use chatpack::prelude::*;
-use chatpack::parser::{Platform, create_parser};
 
 fn main() -> Result<()> {
-    // Parse Telegram export
     let parser = create_parser(Platform::Telegram);
-    let messages = parser.parse("export.json".as_ref())?;
+    let messages = parser.parse(Path::new("result.json"))?;
 
-    // Merge consecutive messages from same sender
-    let merged = merge_consecutive(messages);
+    let filtered = apply_filters(messages, &FilterConfig::new().with_sender("Alice"));
+    let merged = merge_consecutive(filtered);
 
-    // Write as CSV (13x compression)
-    write_csv(&merged, "output.csv", &OutputConfig::new())?;
+    write_to_format(
+        &merged,
+        "chat.jsonl",
+        OutputFormat::Jsonl,
+        &OutputConfig::new().with_timestamps(),
+    )?;
 
-    println!("Processed {} messages", merged.len());
     Ok(())
 }
 ```
 
-### 🐍 Python Library
+## Common Workflows
 
-High-performance Python bindings powered by Rust and PyO3. Separate repository: [chatpack-python](https://github.com/Berektassuly/chatpack-python)
+Parse from a string when the export is already in memory:
 
-#### Installation
+```rust
+use chatpack::prelude::*;
 
-```bash
-pip install chatpack
+fn main() -> Result<()> {
+    let parser = create_parser(Platform::WhatsApp);
+    let messages = parser.parse_str("[1/15/24, 10:30 AM] Alice: Hello")?;
+
+    println!("Parsed {} message(s)", messages.len());
+    Ok(())
+}
 ```
 
-#### Quick Start
+Stream large files when loading the full export is not practical:
 
-```python
-import chatpack
+```rust
+use std::path::Path;
 
-# Parse Telegram export with automatic merging
-messages = chatpack.parse_telegram("result.json", merge=True)
+use chatpack::prelude::*;
 
-# Convert to list of dicts for pandas/JSON
-data = [m.to_dict() for m in messages]
+fn main() -> Result<()> {
+    let parser = create_streaming_parser(Platform::Telegram);
 
-print(f"Processed {len(messages)} messages")
+    for result in parser.stream(Path::new("huge_result.json"))? {
+        let message = result?;
+        println!("{}: {}", message.sender, message.content);
+    }
+
+    Ok(())
+}
 ```
 
-See [chatpack-python README](https://github.com/Berektassuly/chatpack-python) for full Python documentation.
+Choose output based on the downstream task:
 
----
+| Output | Best for | Why |
+|--------|----------|-----|
+| CSV | LLM context windows, spreadsheets | Most compact; sender/content only by default |
+| JSONL | RAG, vector DB ingestion, streaming pipelines | One message per line |
+| JSON | APIs, archival, structured post-processing | Full JSON array |
 
-## Documentation
+Optional metadata is controlled by `OutputConfig`:
 
-| Guide | Description |
-|-------|-------------|
-| [Export Guide](docs/EXPORT_GUIDE.md) | How to export from Telegram, WhatsApp, Instagram, Discord |
-| [Benchmarks](docs/BENCHMARKS.md) | Performance metrics and compression stats |
-| [API Docs](https://docs.rs/chatpack) | Structs, traits, and functions reference |
-
----
+```rust
+let compact = OutputConfig::new();
+let detailed = OutputConfig::all();
+let timestamps_only = OutputConfig::new().with_timestamps();
+```
 
 ## Feature Flags
 
+The default feature set is `full`, which enables every parser, CSV/JSON output, and streaming support.
+
 | Feature | Description | Default |
 |---------|-------------|---------|
-| `full` | All parsers + outputs + streaming | Yes |
+| `full` | All parsers, outputs, and streaming | Yes |
 | `telegram` | Telegram JSON parser | Yes |
 | `whatsapp` | WhatsApp TXT parser | Yes |
 | `instagram` | Instagram JSON parser | Yes |
-| `discord` | Discord multi-format parser | Yes |
-| `csv-output` | CSV output writer | Yes |
-| `json-output` | JSON/JSONL output writers | Yes |
-| `streaming` | O(1) memory streaming parsers | Yes |
-| `async` | Tokio-based async parsers | No |
+| `discord` | Discord JSON/TXT/CSV parser | Yes |
+| `csv-output` | CSV writer and string conversion | Yes |
+| `json-output` | JSON and JSONL writers/string conversion | Yes |
+| `streaming` | Native streaming parsers and progress tracking | Yes |
+| `async` | Tokio-based async parser support, currently Telegram | No |
 
-Minimal installation example:
+## Documentation
 
-```toml
-chatpack = { version = "0.5", default-features = false, features = ["telegram", "csv-output"] }
+| Resource | Description |
+|----------|-------------|
+| [API Docs](https://docs.rs/chatpack) | Public Rust API, modules, traits, and examples |
+| [Export Guide](docs/EXPORT_GUIDE.md) | How to prepare Telegram, WhatsApp, Instagram, and Discord files |
+| [Benchmarks](docs/BENCHMARKS.md) | Compression data, current benchmark groups, and local benchmark commands |
+| [examples/library_usage.rs](examples/library_usage.rs) | Basic library usage patterns |
+| [examples/rag_integration.rs](examples/rag_integration.rs) | Example chunking flow for RAG systems |
+
+## Related Tools
+
+This repository is the Rust core library. Other Chatpack tools live separately:
+
+| Repository | Purpose |
+|------------|---------|
+| [chatpack-cli](https://github.com/Berektassuly/chatpack-cli) | Command-line interface |
+| [chatpack-web](https://github.com/Berektassuly/chatpack-web) | Browser/WASM interface |
+| [chatpack-python](https://github.com/Berektassuly/chatpack-python) | Python bindings |
+
+## Development
+
+```bash
+cargo fmt --all -- --check
+cargo test --all-features
+cargo clippy --all-targets -- -D warnings
+cargo bench --bench parsing
 ```
 
----
-
-## Minimum Supported Rust Version
-
-Rust 2024 edition (rustc 1.85+). MSRV is tested in CI.
-
----
-
-## Minimum Supported Python Version
-
-Python 3.8+. Supported versions (3.8, 3.9, 3.10, 3.11, 3.12) are tested in CI.
-
----
-
-## Contributing
-
-Contributions welcome! Please:
-
-1. Check existing issues
-2. Open an issue before large changes
-3. Run `cargo test && cargo clippy` before submitting PRs
-
----
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-## Related Repositories
-
-| Repository | Description |
-|------------|-------------|
-| [chatpack](https://github.com/Berektassuly/chatpack) | Core library (this repo) |
-| [chatpack-python](https://github.com/Berektassuly/chatpack-python) | Python library (PyO3 bindings) |
-| [chatpack-cli](https://github.com/Berektassuly/chatpack-cli) | Command-line tool |
-| [chatpack-web](https://github.com/Berektassuly/chatpack-web) | Web interface (WASM) |
+The crate uses Rust 2024 edition, so Rust 1.85 or newer is required. CI currently builds and tests on stable Rust across Linux, macOS, and Windows.
