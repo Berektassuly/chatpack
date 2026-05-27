@@ -3,14 +3,31 @@
 //! Run with: `cargo bench`
 //! Run specific group: `cargo bench --bench parsing -- telegram`
 
+use std::io::Write;
+use std::time::Duration as StdDuration;
+
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 use chatpack::core::output::{to_csv, to_json, to_jsonl};
 use chatpack::core::{FilterConfig, Message, OutputConfig, apply_filters, merge_consecutive};
 use chatpack::parser::Parser;
 use chatpack::parsers::{DiscordParser, InstagramParser, TelegramParser, WhatsAppParser};
+use chatpack::streaming::{InstagramStreamingParser, StreamingParser, TelegramStreamingParser};
 
 use chrono::{Duration, TimeZone, Utc};
+use serde_json::json;
+use tempfile::NamedTempFile;
+
+const JSON_STREAMING_BENCH_SIZES: [usize; 4] = [100, 1_000, 10_000, 50_000];
+const STREAMING_SAMPLE_SIZE: usize = 10;
+const TRICKY_MESSAGE_CONTENTS: [&str; 6] = [
+    "plain { opening brace",
+    "plain } closing brace",
+    "both { nested-looking } braces",
+    "escaped quote: \"hello\"",
+    r"escaped backslash: C:\tmp\chatpack",
+    r#"mixed payload: {"fake":"object"} and \"quoted\" text"#,
+];
 
 // =============================================================================
 // Test Data Generators
@@ -62,6 +79,57 @@ fn generate_instagram_json(count: usize) -> String {
     )
 }
 
+fn benchmark_message_content(index: usize, tricky_strings: bool) -> String {
+    if tricky_strings {
+        TRICKY_MESSAGE_CONTENTS[index % TRICKY_MESSAGE_CONTENTS.len()].to_string()
+    } else {
+        format!("Message number {index}")
+    }
+}
+
+fn generate_telegram_streaming_json(count: usize, tricky_strings: bool) -> String {
+    let messages: Vec<_> = (0..count)
+        .map(|i| {
+            let sender = if i % 2 == 0 { "Alice" } else { "Bob" };
+            let timestamp = 1_705_314_600 + (i as i64 * 60);
+            json!({
+                "id": i + 1,
+                "type": "message",
+                "date_unixtime": timestamp.to_string(),
+                "from": sender,
+                "text": benchmark_message_content(i, tricky_strings),
+            })
+        })
+        .collect();
+
+    serde_json::to_string(&json!({
+        "name": "Test Chat",
+        "type": "personal_chat",
+        "messages": messages,
+    }))
+    .expect("telegram benchmark export should serialize")
+}
+
+fn generate_instagram_streaming_json(count: usize, tricky_strings: bool) -> String {
+    let messages: Vec<_> = (0..count)
+        .map(|i| {
+            let sender = if i % 2 == 0 { "alice_user" } else { "bob_user" };
+            let timestamp = 1_705_314_600_000_i64 + (i as i64 * 60_000);
+            json!({
+                "sender_name": sender,
+                "timestamp_ms": timestamp,
+                "content": benchmark_message_content(i, tricky_strings),
+            })
+        })
+        .collect();
+
+    serde_json::to_string(&json!({
+        "participants": [{"name": "alice_user"}, {"name": "bob_user"}],
+        "messages": messages,
+    }))
+    .expect("instagram benchmark export should serialize")
+}
+
 fn generate_discord_json(count: usize) -> String {
     let mut messages = Vec::with_capacity(count);
     for i in 0..count {
@@ -101,6 +169,31 @@ fn generate_messages(count: usize) -> Vec<Message> {
         .collect()
 }
 
+fn write_benchmark_file(contents: &str) -> NamedTempFile {
+    let mut file = NamedTempFile::new().expect("temporary benchmark file should be created");
+    file.write_all(contents.as_bytes())
+        .expect("temporary benchmark file should be writable");
+    file.flush()
+        .expect("temporary benchmark file should be flushed");
+    file
+}
+
+fn benchmark_file_path(file: &NamedTempFile) -> String {
+    file.path()
+        .to_str()
+        .expect("temporary benchmark path should be valid UTF-8")
+        .to_string()
+}
+
+fn count_streaming_messages<P: StreamingParser + ?Sized>(parser: &P, path: &str) -> usize {
+    let mut count = 0;
+    for result in parser.stream(path).expect("stream should open") {
+        result.expect("message should parse");
+        count += 1;
+    }
+    count
+}
+
 // =============================================================================
 // Parsing Benchmarks
 // =============================================================================
@@ -116,6 +209,62 @@ fn bench_telegram_parsing(c: &mut Criterion) {
             b.iter(|| {
                 let messages = parser.parse_str(black_box(json)).unwrap();
                 black_box(messages)
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_telegram_streaming(c: &mut Criterion) {
+    let mut group = c.benchmark_group("telegram_streaming");
+    group.sample_size(STREAMING_SAMPLE_SIZE);
+    group.measurement_time(StdDuration::from_secs(10));
+
+    for size in JSON_STREAMING_BENCH_SIZES {
+        let json = generate_telegram_streaming_json(size, false);
+        let file = write_benchmark_file(&json);
+        let path = benchmark_file_path(&file);
+
+        assert_eq!(
+            count_streaming_messages(&TelegramStreamingParser::new(), &path),
+            size,
+            "telegram streaming setup should parse every generated message"
+        );
+
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(size), &path, |b, path| {
+            b.iter(|| {
+                let parser = TelegramStreamingParser::new();
+                let count = count_streaming_messages(&parser, path);
+                black_box(count)
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_telegram_streaming_tricky_strings(c: &mut Criterion) {
+    let mut group = c.benchmark_group("telegram_streaming_tricky_strings");
+    group.sample_size(STREAMING_SAMPLE_SIZE);
+    group.measurement_time(StdDuration::from_secs(10));
+
+    for size in JSON_STREAMING_BENCH_SIZES {
+        let json = generate_telegram_streaming_json(size, true);
+        let file = write_benchmark_file(&json);
+        let path = benchmark_file_path(&file);
+
+        assert_eq!(
+            count_streaming_messages(&TelegramStreamingParser::new(), &path),
+            size,
+            "telegram streaming tricky-string setup should parse every generated message"
+        );
+
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(size), &path, |b, path| {
+            b.iter(|| {
+                let parser = TelegramStreamingParser::new();
+                let count = count_streaming_messages(&parser, path);
+                black_box(count)
             });
         });
     }
@@ -150,6 +299,62 @@ fn bench_instagram_parsing(c: &mut Criterion) {
             b.iter(|| {
                 let messages = parser.parse_str(black_box(json)).unwrap();
                 black_box(messages)
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_instagram_streaming(c: &mut Criterion) {
+    let mut group = c.benchmark_group("instagram_streaming");
+    group.sample_size(STREAMING_SAMPLE_SIZE);
+    group.measurement_time(StdDuration::from_secs(10));
+
+    for size in JSON_STREAMING_BENCH_SIZES {
+        let json = generate_instagram_streaming_json(size, false);
+        let file = write_benchmark_file(&json);
+        let path = benchmark_file_path(&file);
+
+        assert_eq!(
+            count_streaming_messages(&InstagramStreamingParser::new(), &path),
+            size,
+            "instagram streaming setup should parse every generated message"
+        );
+
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(size), &path, |b, path| {
+            b.iter(|| {
+                let parser = InstagramStreamingParser::new();
+                let count = count_streaming_messages(&parser, path);
+                black_box(count)
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_instagram_streaming_tricky_strings(c: &mut Criterion) {
+    let mut group = c.benchmark_group("instagram_streaming_tricky_strings");
+    group.sample_size(STREAMING_SAMPLE_SIZE);
+    group.measurement_time(StdDuration::from_secs(10));
+
+    for size in JSON_STREAMING_BENCH_SIZES {
+        let json = generate_instagram_streaming_json(size, true);
+        let file = write_benchmark_file(&json);
+        let path = benchmark_file_path(&file);
+
+        assert_eq!(
+            count_streaming_messages(&InstagramStreamingParser::new(), &path),
+            size,
+            "instagram streaming tricky-string setup should parse every generated message"
+        );
+
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(size), &path, |b, path| {
+            b.iter(|| {
+                let parser = InstagramStreamingParser::new();
+                let count = count_streaming_messages(&parser, path);
+                black_box(count)
             });
         });
     }
@@ -353,8 +558,12 @@ fn bench_full_pipeline(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_telegram_parsing,
+    bench_telegram_streaming,
+    bench_telegram_streaming_tricky_strings,
     bench_whatsapp_parsing,
     bench_instagram_parsing,
+    bench_instagram_streaming,
+    bench_instagram_streaming_tricky_strings,
     bench_discord_parsing,
     bench_merge_consecutive,
     bench_filter_by_sender,
