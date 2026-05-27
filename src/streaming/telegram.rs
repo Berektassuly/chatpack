@@ -15,14 +15,17 @@
 //! This parser streams the messages array without loading the entire file.
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Seek};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use crate::Message;
 use crate::error::ChatpackError;
 use crate::parsing::telegram::{TelegramRawMessage, parse_telegram_message};
 
-use super::{MessageIterator, StreamingConfig, StreamingError, StreamingParser, StreamingResult};
+#[cfg(test)]
+use super::StreamingError;
+use super::json_array::JsonArrayObjectReader;
+use super::{MessageIterator, StreamingConfig, StreamingParser, StreamingResult};
 
 /// Streaming parser for Telegram JSON exports.
 ///
@@ -89,123 +92,25 @@ impl StreamingParser for TelegramStreamingParser {
 }
 
 /// Iterator over Telegram messages.
-pub struct TelegramMessageIterator<R: BufRead + Seek> {
-    reader: R,
+pub struct TelegramMessageIterator<R: BufRead> {
+    objects: JsonArrayObjectReader<R>,
     file_size: u64,
-    bytes_read: u64,
     config: StreamingConfig,
-    buffer: String,
-    finished: bool,
-    brace_depth: i32,
 }
 
-impl<R: BufRead + Seek> TelegramMessageIterator<R> {
+impl<R: BufRead> TelegramMessageIterator<R> {
     /// Creates a new iterator, seeking to the messages array.
-    fn new(mut reader: R, file_size: u64, config: StreamingConfig) -> StreamingResult<Self> {
-        // Find the start of "messages" array
-        let mut buffer = String::with_capacity(config.buffer_size);
-        let mut total_read = 0u64;
-
-        loop {
-            buffer.clear();
-            let bytes = reader.read_line(&mut buffer)?;
-            if bytes == 0 {
-                return Err(StreamingError::InvalidFormat(
-                    "Could not find 'messages' array in file".into(),
-                ));
-            }
-            total_read += bytes as u64;
-
-            if buffer.contains("\"messages\"") && buffer.contains('[') {
-                break;
-            }
-
-            // Safety limit: if we've read 10MB and haven't found messages, give up
-            if total_read > 10 * 1024 * 1024 {
-                return Err(StreamingError::InvalidFormat(
-                    "File header too large or 'messages' array not found".into(),
-                ));
-            }
-        }
-
+    fn new(reader: R, file_size: u64, config: StreamingConfig) -> StreamingResult<Self> {
         Ok(Self {
-            reader,
+            objects: JsonArrayObjectReader::new(
+                reader,
+                "messages",
+                config.buffer_size,
+                config.max_message_size,
+            )?,
             file_size,
-            bytes_read: total_read,
-            buffer: String::with_capacity(config.max_message_size),
-            finished: false,
-            brace_depth: 0,
             config,
         })
-    }
-
-    /// Reads the next JSON object from the messages array.
-    fn read_next_object(&mut self) -> StreamingResult<Option<String>> {
-        self.buffer.clear();
-        self.brace_depth = 0;
-        let mut found_start = false;
-
-        loop {
-            let mut line = String::new();
-            let bytes = self.reader.read_line(&mut line)?;
-
-            if bytes == 0 {
-                self.finished = true;
-                if found_start {
-                    return Err(StreamingError::UnexpectedEof);
-                }
-                return Ok(None);
-            }
-
-            self.bytes_read += bytes as u64;
-
-            // Check for end of messages array
-            if !found_start && line.trim().starts_with(']') {
-                self.finished = true;
-                return Ok(None);
-            }
-
-            // Skip empty lines and commas between objects
-            let trimmed = line.trim();
-            if !found_start && (trimmed.is_empty() || trimmed == ",") {
-                continue;
-            }
-
-            // Count braces
-            for ch in line.chars() {
-                match ch {
-                    '{' => {
-                        if !found_start {
-                            found_start = true;
-                        }
-                        self.brace_depth += 1;
-                    }
-                    '}' => {
-                        self.brace_depth -= 1;
-                    }
-                    _ => {}
-                }
-            }
-
-            if found_start {
-                self.buffer.push_str(&line);
-
-                // Check buffer size limit
-                if self.buffer.len() > self.config.max_message_size {
-                    return Err(StreamingError::BufferOverflow {
-                        max_size: self.config.max_message_size,
-                        actual_size: self.buffer.len(),
-                    });
-                }
-
-                // Complete object found
-                if self.brace_depth == 0 {
-                    // Remove trailing comma if present
-                    let result = self.buffer.trim().trim_end_matches(',').to_string();
-                    return Ok(Some(result));
-                }
-            }
-        }
     }
 
     /// Parses a JSON string into a Message using shared parsing logic.
@@ -215,16 +120,16 @@ impl<R: BufRead + Seek> TelegramMessageIterator<R> {
     }
 }
 
-impl<R: BufRead + Seek + Send> MessageIterator for TelegramMessageIterator<R> {
+impl<R: BufRead + Send> MessageIterator for TelegramMessageIterator<R> {
     fn progress(&self) -> Option<f64> {
         if self.file_size == 0 {
             return None;
         }
-        Some((self.bytes_read as f64 / self.file_size as f64) * 100.0)
+        Some((self.objects.bytes_read() as f64 / self.file_size as f64) * 100.0)
     }
 
     fn bytes_processed(&self) -> u64 {
-        self.bytes_read
+        self.objects.bytes_read()
     }
 
     fn total_bytes(&self) -> Option<u64> {
@@ -232,16 +137,12 @@ impl<R: BufRead + Seek + Send> MessageIterator for TelegramMessageIterator<R> {
     }
 }
 
-impl<R: BufRead + Seek + Send> Iterator for TelegramMessageIterator<R> {
+impl<R: BufRead + Send> Iterator for TelegramMessageIterator<R> {
     type Item = StreamingResult<Message>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.finished {
-            return None;
-        }
-
         loop {
-            match self.read_next_object() {
+            match self.objects.next_object() {
                 Ok(Some(json_str)) => {
                     match Self::parse_message_from_json(&json_str) {
                         Ok(Some(msg)) => return Some(Ok(msg)),
@@ -345,6 +246,22 @@ mod tests {
 
         let messages: Vec<_> = iterator.by_ref().filter_map(Result::ok).collect();
         assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn test_braces_inside_json_strings() {
+        let json = r#"{"name":"Chat","messages":[{"id":1,"type":"message","date_unixtime":"1705314600","from":"Alice","text":"has { brace and escaped \"quote\""},{"id":2,"type":"message","date_unixtime":"1705314660","from":"Bob","text":"has } brace"}]}"#;
+        let cursor = Cursor::new(json.as_bytes().to_vec());
+        let reader = BufReader::new(cursor);
+
+        let mut iterator =
+            TelegramMessageIterator::new(reader, json.len() as u64, StreamingConfig::default())
+                .unwrap();
+
+        let messages: Vec<_> = iterator.by_ref().filter_map(Result::ok).collect();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].content, "has { brace and escaped \"quote\"");
+        assert_eq!(messages[1].content, "has } brace");
     }
 
     // =========================================================================

@@ -88,6 +88,8 @@ mod discord;
 mod error;
 #[cfg(feature = "instagram")]
 mod instagram;
+#[cfg(any(feature = "telegram", feature = "instagram"))]
+mod json_array;
 #[cfg(feature = "telegram")]
 mod telegram;
 mod traits;

@@ -149,9 +149,14 @@ impl Parser for InstagramParser {
             let iterator =
                 StreamingParser::stream(&streaming_parser, path.to_str().unwrap_or_default())?;
 
-            Ok(Box::new(
-                iterator.map(|result| result.map_err(ChatpackError::from)),
-            ))
+            // Instagram exports newest-first. The native streaming iterator yields file order,
+            // so the high-level Parser API buffers here to match parse()/parse_str().
+            let mut messages = iterator
+                .map(|result| result.map_err(ChatpackError::from))
+                .collect::<Result<Vec<_>, _>>()?;
+            messages.reverse();
+
+            Ok(Box::new(messages.into_iter().map(Ok)))
         } else {
             // Fallback: load everything into memory
             let messages = Parser::parse(self, path)?;
@@ -353,5 +358,30 @@ mod tests {
 
         let streaming_parser = InstagramParser::with_streaming();
         assert_eq!(streaming_parser.recommended_buffer_size(), 256 * 1024);
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn test_stream_matches_parse_order() {
+        use std::io::Write;
+
+        let json = r#"{"messages": [
+            {"sender_name": "First", "content": "1", "timestamp_ms": 1234567890000},
+            {"sender_name": "Second", "content": "2", "timestamp_ms": 1234567891000},
+            {"sender_name": "Third", "content": "3", "timestamp_ms": 1234567892000}
+        ]}"#;
+        let mut file = tempfile::NamedTempFile::new().expect("create temp file");
+        file.write_all(json.as_bytes()).expect("write fixture");
+
+        let parser = InstagramParser::with_streaming();
+        let streamed = parser
+            .stream(file.path())
+            .expect("stream fixture")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect streamed messages");
+        let parsed = parser.parse_str(json).expect("parse fixture");
+
+        assert_eq!(streamed, parsed);
+        assert_eq!(streamed[0].sender, "Third");
     }
 }

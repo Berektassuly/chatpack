@@ -5,19 +5,25 @@ use chatpack::parser::{Platform, create_parser};
 use chatpack::prelude::*;
 use std::fs;
 use std::path::Path;
-use std::sync::Once;
+use std::sync::{Once, OnceLock};
+use tempfile::TempDir;
 
 static INIT: Once = Once::new();
+static FIXTURES: OnceLock<TempDir> = OnceLock::new();
 
-fn fixtures_dir() -> &'static str {
-    "tests/fixtures"
+fn fixtures_dir() -> String {
+    FIXTURES
+        .get_or_init(|| tempfile::tempdir().expect("create temporary fixtures directory"))
+        .path()
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn ensure_fixtures() {
     INIT.call_once(|| {
         let dir = fixtures_dir();
-        if !Path::new(dir).exists() {
-            fs::create_dir_all(dir).unwrap();
+        if !Path::new(&dir).exists() {
+            fs::create_dir_all(&dir).unwrap();
         }
 
         // Telegram: Simple with explicit timestamps and unixtime for robustness
